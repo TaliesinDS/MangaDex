@@ -48,6 +48,18 @@ For Mangaupdates, you run *Mangaupdates MD List.py* and use your normal login de
 
 
 # Don't forget to support the Author/Artist
+
+
 ## YouTube Visual version:
 
 [![YouTube Visual version](https://i.ytimg.com/vi/u0VuEufNFfY/maxresdefault.jpg)](https://www.youtube.com/watch?v=u0VuEufNFfY)
+
+# - B O N U S -
+
+Anime recommendations:
+- https://www.reddit.com/user/theanimesyndicate/m/completedanimecollection_can/
+- https://discord.gg/RQsUfqNXJ9
+
+Manga Recommendations: 
+- https://www.reddit.com/user/mangasyndicate/m/completedmangacollection_can/
+- https://discord.gg/SMzR6zzXFu
