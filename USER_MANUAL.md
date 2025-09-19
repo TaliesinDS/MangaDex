@@ -264,11 +264,32 @@ Basic dry run:
 python import_mangadex_bookmarks_to_suwayomi.py `
    --base-url http://127.0.0.1:4567 `
    --migrate-library `
-   --migrate-threshold-chapters 1 `
-   --migrate-sources "weeb central,mangapark" `
-   --exclude-sources "comick,hitomi" `
-   --dry-run
+
+## 5.0 Graphical Control Panel (optional)
+
+Two ways to use the GUI:
+
+- Quick run (requires Python):
+
+```powershell
+python .\gui_launcher_tk.py
 ```
+
+- Standalone EXE (no Python required):
+
+```powershell
+.# Build once (produces EXEs in .\dist)
+ .\build_exe.ps1 -Clean
+ # Launch the GUI
+ .\dist\MangaDex_Suwayomi_ControlPanel.exe
+```
+
+Notes:
+
+- The GUI is free and open-source (Tkinter, part of Python stdlib).
+- Press the “?” button in the top-right to open this manual.
+- Presets are included for common tasks (Prefer English Migration, Cleanup Non-English, Keep Both).
+ 
 
 Apply changes (remove `--dry-run`), and optionally delete the original entry when an alternative is added:
 
