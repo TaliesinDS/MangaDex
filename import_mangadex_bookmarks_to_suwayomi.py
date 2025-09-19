@@ -1555,7 +1555,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--migrate-threshold-chapters", type=int, default=1, help="Only migrate entries with fewer than this many chapters (default 1)")
     p.add_argument("--migrate-sources", help="Preferred alternative sources (comma-separated fragments). If omitted, uses --rehoming-sources")
     p.add_argument("--exclude-sources", default="comick,hitomi", help="Comma-separated source name fragments to always exclude (default: 'comick,hitomi')")
-    p.add_argument("--migrate-remove", action="store_true", help="Remove the original library entry after a successful migration")
+    p.add_argument("--migrate-remove", action=argparse.BooleanOptionalAction, default=True, help="Remove the original library entry after a successful migration (default: enabled; use --no-migrate-remove to keep the original)")
     p.add_argument("--migrate-remove-if-duplicate", action="store_true", help="If the selected alternative already exists in the library and has >0 chapters, remove the original zero/low-chapter entry instead of adding a duplicate")
     p.add_argument("--debug-library", action="store_true", help="Verbose diagnostics for library and chapter listing endpoints during migration")
     p.add_argument("--request-timeout", type=float, default=12.0, help="Default HTTP request timeout in seconds (default 12)")
@@ -1566,6 +1566,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--migrate-preferred-only", action="store_true", help="When set and --migrate-sources provided, restrict search to only those sources (by name fragments)")
     p.add_argument("--preferred-langs", help="Comma-separated language codes to prefer when counting chapters (e.g. 'en,en-us,id'). If set, candidates are scored by chapters in these languages")
     p.add_argument("--lang-fallback", action="store_true", help="If no chapters match preferred languages for a candidate, allow non-preferred counts as fallback")
+    # Source preference (quality bias)
+    p.add_argument("--prefer-sources", help="Comma-separated source name fragments to bias as higher-quality (e.g. 'asura,flame,genz,utoons')")
+    p.add_argument("--prefer-boost", type=int, default=3, help="Add this many points to the candidate score when its source matches --prefer-sources (default 3)")
+    p.add_argument("--migrate-keep-both", action="store_true", help="When using global best, also add the raw max-chapters candidate if different from the preferred boosted winner (helps keep quality + completeness)")
+    p.add_argument("--keep-both-min-preferred", type=int, default=1, help="Minimum preferred-language chapters required on the second candidate to keep it as well (set 0 to allow non-preferred) (default 1)")
     p.add_argument("--migrate-include-categories", help="Comma-separated category IDs or names; only entries in at least one of these categories will be migrated")
     p.add_argument("--migrate-exclude-categories", help="Comma-separated category IDs or names; entries in any of these categories will be skipped")
     # Best source selection
@@ -2310,7 +2315,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             per_site_counts: Dict[str, int] = {}
             cap_announced: Dict[str, bool] = {}
             # If global best is requested, accumulate candidates across sites first
-            global_best: Optional[Tuple[int, int, Dict[str, Any]]] = None  # (score,count,cand)
+            global_best: Optional[Tuple[int, int, Dict[str, Any]]] = None  # (score,alt_id,source)
+            global_raw_max: Optional[Tuple[int, int, Dict[str, Any]]] = None  # (raw_count,alt_id,source)
+            # Parse quality-preferred sources
+            prefer_frags = [s.strip().lower() for s in (args.prefer_sources.split(',') if args.prefer_sources else []) if s.strip()]
             for src in sorted_sources:
                 nm = (src.get('name') or src.get('apkName') or '').lower()
                 try:
@@ -2378,8 +2386,18 @@ def main(argv: Optional[List[str]] = None) -> int:
                                     ccount = client_auth.get_manga_chapters_canonical_count(cid) if args.best_source_canonical else client_auth.get_manga_chapters_count(cid)
                             else:
                                 ccount = client_auth.get_manga_chapters_canonical_count(cid) if args.best_source_canonical else client_auth.get_manga_chapters_count(cid)
+                            # Apply quality boost for preferred sources
+                            if prefer_frags and any(f in nm for f in prefer_frags):
+                                ccount += int(args.prefer_boost)
+                            # Track raw (unboosted, non-language-fallback) max for optional keep-both
+                            try:
+                                # Raw = total chapters (canonical if requested), no language filter, no source boost
+                                raw = client_auth.get_manga_chapters_canonical_count(cid) if args.best_source_canonical else client_auth.get_manga_chapters_count(cid)
+                            except Exception:
+                                raw = 0
                         except Exception:
                             ccount = 0
+                            raw = 0
                         if args.debug_library and not args.no_progress:
                             ctitle = str(cand.get('title') or cand.get('name') or '')
                             print(f"[{idx}]     cand id={cid} site='{nm}' score={ccount} title='{ctitle[:60]}'")
@@ -2389,6 +2407,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                             if not args.best_source_global:
                                 # non-global: choose per-site immediately
                                 pass
+                        # Track global raw max by raw count
+                        if args.best_source_global and (global_raw_max is None or raw > global_raw_max[0]):
+                            global_raw_max = (raw, cid, src)
                     if args.best_source_global and alt_id is not None:
                         score_val = best_count
                         if global_best is None or score_val > global_best[0]:
@@ -2493,6 +2514,32 @@ def main(argv: Optional[List[str]] = None) -> int:
                         pass
                 if added_any:
                     migrated += 1
+                    # Optionally also add the raw-max candidate for completeness if different
+                    if args.migrate_keep_both and global_raw_max is not None:
+                        raw_count, raw_alt_id, raw_src = global_raw_max
+                        if raw_alt_id and raw_alt_id != best_alt_id:
+                            # If user requires the second candidate to also have preferred-language chapters, enforce it
+                            if args.keep_both_min_preferred > 0:
+                                try:
+                                    pref_cnt_second = client_auth.get_manga_chapters_count_by_lang(raw_alt_id, pref_langs, canonical=args.best_source_canonical) if pref_langs else 0
+                                except Exception:
+                                    pref_cnt_second = 0
+                                if pref_cnt_second < int(args.keep_both_min_preferred):
+                                    if args.debug_library and not args.no_progress:
+                                        print(f"[{idx}]   skip raw-max keep (preferred-lang chapters {pref_cnt_second} < {args.keep_both_min_preferred})")
+                                    return migrated  # skip second add
+                            if args.dry_run:
+                                if not args.no_progress:
+                                    print(f"[{idx}] ALSO KEEP '{title}' via '{raw_src.get('name')}' (raw-max) -> OK (dry-run)")
+                            else:
+                                try:
+                                    ok2 = client_auth.add_to_library(raw_alt_id)
+                                except Exception as e:
+                                    if args.debug_library and not args.no_progress:
+                                        print(f"[{idx}]   add_to_library error for id={raw_alt_id}: {e}")
+                                    ok2 = False
+                                if not args.no_progress:
+                                    print(f"[{idx}] ALSO KEEP '{title}' via '{raw_src.get('name')}' (raw-max) -> {'OK' if ok2 else 'FAIL'}")
             if not added_any:
                 failed += 1
             # Optional light throttle between items if --throttle set

@@ -161,6 +161,52 @@ python import_mangadex_bookmarks_to_suwayomi.py `
 
 This scores candidates by English chapters first; if a site has zero English chapters, it will fall back to total chapters only if `--lang-fallback` is present.
 
+1. Keep both: prefer quality source but also keep the one with most chapters for coverage
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --migrate-library `
+   --migrate-threshold-chapters 1 `
+   --migrate-sources "bato.to,mangabuddy,weeb central,mangapark" `
+   --migrate-preferred-only `
+   --best-source `
+   --best-source-global `
+   --best-source-canonical `
+   --preferred-langs "en,en-us" `
+   --lang-fallback `
+   --prefer-sources "asura,flame,genz,utoons" `
+   --prefer-boost 3 `
+   --migrate-keep-both `
+   --migrate-remove
+```
+
+This picks the best candidate by language + quality bias and also adds the raw max‑chapters candidate when it’s a different site, so you can read early chapters on the higher‑quality source and switch to the fuller source later.
+
+1. Keep originals instead of removing them (optional)
+
+By default, all examples remove the original zero/low‑chapter entry after adding the alternative. To keep your original entries, add `--no-migrate-remove`:
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --migrate-library `
+   --migrate-threshold-chapters 1 `
+   --migrate-sources "bato.to,mangabuddy" `
+   --migrate-preferred-only `
+   --best-source `
+   --best-source-canonical `
+   --preferred-langs "en,en-us" `
+   --lang-fallback `
+   --no-migrate-remove `
+   --dry-run
+```
+
+Important:
+
+- The examples in this manual default to removal. If you don’t want that behavior, copy the snippet above and keep the `--no-migrate-remove` flag.
+- You can always do a dry run first and remove `--dry-run` when you’re satisfied with the output.
+
 1. Cleanup: remove non-English variants when an English one exists (no searching)
 
 ```powershell
@@ -205,16 +251,12 @@ Notes:
 - Put your preferred site first (e.g., `bato.to`), fallback second (e.g., `mangabuddy`).
 - Keep `--best-source-canonical` on so split/alt releases are counted together.
 - Use `--migrate-remove-if-duplicate` if you want to only remove the zero‑chapter one when a duplicate already exists.
-- Use `--migrate-remove` if you want to replace zero‑chapter entries with the alternative you just added.
+- --migrate-remove is ON by default in these examples (the script default). Use `--no-migrate-remove` if you prefer to keep the original after adding the alternative (optional).
 - Add `--exclude-sources "comick,hitomi"` if you don’t want those mirrors.
 - For a search-free cleanup, use the hard prune command above; it keeps the title variant with the most chapters and removes other zero-chapter variants.
 - Only migrate specific categories: add `--migrate-include-categories "Reading,On Hold"` or by id `--migrate-include-categories "5,7"`. To skip categories instead use `--migrate-exclude-categories`.
-- Prefer specific languages during migration with `--preferred-langs "en,en-us"`. Add `--lang-fallback` if you want to consider non-preferred languages when none match.
-- Remove non-preferred language duplicates later with `--prune-nonpreferred-langs --preferred-langs "en,en-us"` (can be limited by `--prune-filter-title`).
-
-## 4.1 Migrate Library (Rehome Delisted/Empty Sources)
-
-If you already have a Suwayomi library and want to add an alternative source entry for series that have 0 (or very few) chapters on their current source, use migrate mode. This is ideal when MangaDex entries are delisted/empty.
+- Favor likely-original scanlator sources by boosting their score: `--prefer-sources "asura,flame,genz,utoons" --prefer-boost 3`.
+- Keep both when needed: add `--migrate-keep-both` with `--best-source-global` to save both quality and coverage variants.
 
 Basic dry run:
 
@@ -452,7 +494,7 @@ python import_mangadex_bookmarks_to_suwayomi.py `
 - Migration/Rehoming (existing library): `--migrate-library`, `--migrate-threshold-chapters`, `--migrate-sources`, `--migrate-remove`, `--migrate-remove-if-duplicate`, `--migrate-filter-title`, `--migrate-max-sources-per-site`, `--migrate-try-second-page`, `--migrate-timeout`, `--best-source`, `--best-source-global`, `--best-source-candidates`, `--best-source-canonical`, `--min-chapters-per-alt`, `--debug-library`
 - Migration filtering: `--migrate-include-categories`, `--migrate-exclude-categories`
 - Prune (no searching): `--prune-zero-duplicates`, `--prune-threshold-chapters`, `--prune-filter-title`
-   - Language cleanup: `--prune-nonpreferred-langs`, `--prune-lang-threshold`
+- Language cleanup: `--prune-nonpreferred-langs`, `--prune-lang-threshold`
 - Language preference: `--preferred-langs`, `--lang-fallback`
 - Rehoming during import (optional path used when MangaDex has 0 chapters): `--rehoming-enabled`, `--rehoming-sources`, `--rehoming-skip-if-chapters-ge`, `--rehoming-remove-mangadex`
 
