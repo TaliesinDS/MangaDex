@@ -12,12 +12,18 @@ It can:
 - (Optional) Put each manga into categories based on your MangaDex reading status (Reading, Completed, Dropped, etc.).
 - (Optional) Mark chapters as read in Suwayomi to match what you have already read on MangaDex.
 - (Optional) Use a local bookmarks/list file instead of your live follows.
+- Migrate entries already in your Suwayomi library to alternative sources (e.g., Weeb Central, MangaPark) when the original source has 0 or very few chapters. This is useful for delisted/DMCA’d manga on MangaDex.
 
 It does **not**:
 
 - Create categories automatically (you should create them in Suwayomi first and note their numeric IDs).
 - Recover chapters that have been DMCA removed or delisted from MangaDex.
 - Sync continuously (it is a one‑time or occasional run tool).
+
+Notes about connections/authentication:
+
+- The tool talks to your Suwayomi server using its REST API and, if needed, its GraphQL endpoint. Many Suwayomi builds expose GraphQL openly on <http://127.0.0.1:4567/api/graphql>, which lets this tool work even if some REST endpoints require a UI token.
+- If your server requires authentication for the endpoints this tool needs, you can pass --username/--password or --token. Otherwise you can leave auth out.
 
 ---
 
@@ -65,6 +71,40 @@ It does **not**:
 11. Accept the default to do a **Dry run** first (`Y`).
 12. Wait—dry run shows what *would* be added (no changes yet).
 13. At the end it will ask if you want to run again without dry-run. Press `Y` to perform the real import.
+
+---
+
+## 4.1 Migrate Library (Rehome Delisted/Empty Sources)
+
+If you already have a Suwayomi library and want to add an alternative source entry for series that have 0 (or very few) chapters on their current source, use migrate mode. This is ideal when MangaDex entries are delisted/empty.
+
+Basic dry run:
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --migrate-library `
+   --migrate-threshold-chapters 1 `
+   --migrate-sources "weeb central,mangapark" `
+   --dry-run
+```
+
+Apply changes (remove `--dry-run`), and optionally delete the original entry when an alternative is added:
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --migrate-library `
+   --migrate-threshold-chapters 1 `
+   --migrate-sources "weeb central,mangapark" `
+   --migrate-remove
+```
+
+Notes:
+
+- The tool discovers your library through GraphQL (categories first) and deduplicates across categories.
+- Chapter count is computed from available endpoints; if chapter endpoints need auth on your server, the tool will fall back to GraphQL and best-effort counting.
+- You can add `--debug-library` to print which endpoints and GraphQL fields were used.
 
 ---
 
@@ -165,6 +205,82 @@ python import_mangadex_bookmarks_to_suwayomi.py `
    --dry-run `
    --no-progress
 ```
+
+---
+
+## 8.1 Useful Utilities
+
+- List categories (get IDs you can map to):
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --list-categories
+```
+
+- Import MangaDex custom lists and map by list name (optional):
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --from-follows `
+   --md-username USER `
+   --md-password PASS `
+   --import-lists `
+   --lists-category-map "Dropped=7,On Hold=5,Plan to Read=8,Completed=9,Reading=4"
+```
+
+- Verify specific MangaDex IDs are in scope (after filters):
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --from-follows `
+   --md-username USER `
+   --md-password PASS `
+   --verify-id 123e4567-e89b-12d3-a456-426614174000 `
+   --verify-id 765e4321-e89b-12d3-a456-426614174111 `
+   --dry-run
+```
+
+- Export statuses you fetched to a JSON file (for auditing):
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --from-follows `
+   --md-username USER `
+   --md-password PASS `
+   --import-reading-status `
+   --export-statuses statuses.json
+```
+
+---
+
+## 8.2 Diagnostic Flags
+
+- `--debug-login` Show MangaDex login flow details (never prints your password).
+- `--debug-follows` Show MangaDex follows pagination.
+- `--debug-status` Print a sample of fetched statuses.
+- `--status-endpoint-raw` Dump raw JSON from the MangaDex status endpoint(s).
+- `--status-map-debug` Explain status->category mapping decisions.
+- `--debug-library` Show Suwayomi library/chapters endpoint attempts and GraphQL choices.
+
+---
+
+## 8.3 Flag Reference (Quick)
+
+- Core: `--base-url`, `--dry-run`, `--no-progress`, `--throttle`, `--category-id`, `--no-title-fallback`
+- Suwayomi auth (only if needed): `--auth-mode auto|basic|simple|bearer`, `--username`, `--password`, `--token`, `--insecure`
+- MangaDex auth: `--md-username`, `--md-password`, `--md-client-id`, `--md-client-secret`, `--md-2fa`
+- Follows: `--from-follows`, `--follows-json`, `--max-follows`, `--debug-follows`
+- Reading status: `--import-reading-status`, `--status-category-map`, `--status-default-category`, `--assume-missing-status`, `--ignore-statuses`, `--print-status-summary`, `--debug-status`, `--status-endpoint-raw`, `--status-fallback-single`, `--status-fallback-throttle`, `--export-statuses`, `--include-library-statuses`, `--library-statuses-only`
+- Chapter progress: `--import-read-chapters`, `--read-chapters-dry-run`, `--read-sync-delay`, `--max-read-requests-per-minute`
+- Lists: `--import-lists`, `--list-lists`, `--lists-category-map`, `--lists-ignore`, `--debug-lists`
+- Migration/Rehoming (existing library): `--migrate-library`, `--migrate-threshold-chapters`, `--migrate-sources`, `--migrate-remove`, `--debug-library`
+- Rehoming during import (optional path used when MangaDex has 0 chapters): `--rehoming-enabled`, `--rehoming-sources`, `--rehoming-skip-if-chapters-ge`, `--rehoming-remove-mangadex`
+
+Tip: When using PowerShell, line continuation is the backtick (`). In cmd.exe use ^ instead, or put the whole command on one line.
 
 ---
 

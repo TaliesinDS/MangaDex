@@ -1,65 +1,119 @@
-# Exporting your MangaDex library
+# MangaDex → Suwayomi Importer
+
+Import your MangaDex follows, reading statuses, and read chapters into a Suwayomi (Tachidesk) server. Optionally migrate existing Suwayomi entries to alternative sources when the original source has 0 chapters (rehoming).
+
+This project is a standalone fork focused solely on MangaDex → Suwayomi. For a step‑by‑step, beginner‑friendly guide, see USER_MANUAL.md.
+
+---
+
+## Features
+
+- Import all followed manga from MangaDex into Suwayomi
+- Map MangaDex reading statuses (Reading, Completed, Dropped, On Hold, Plan to Read) to Suwayomi categories
+- Sync read chapter markers to match MangaDex
+- Import from a local list file as an alternative to live follows
+- Migrate existing Suwayomi library entries to alternative sources (e.g., Weeb Central, MangaPark) when the current source has few/zero chapters
+- Diagnostics and dry‑run mode to preview actions safely
+
+---
 
 ## Prerequisites
 
-Your MangaDex
-- Username
-- Password
-- personal client id
-- Secret
+- Windows (or any OS with Python 3.11+)
+- Python 3.11 or newer
+- A running Suwayomi server (for example <http://127.0.0.1:4567>)
+- MangaDex account (username/password) if importing follows, statuses, or read markers
+- Suwayomi categories created ahead of time if you want status mapping
 
-You get your personal client id and secret under API Clients in Settings https://mangadex.org/settings by creating them https://api.mangadex.org/docs/02-authentication/personal-clients/
+Auth notes:
 
+- Many Suwayomi builds expose GraphQL openly, so you may not need a UI token. If your server requires auth, pass `--username/--password` or `--token`.
 
-# 1. Run *Export libraries from MangaDex.py*
+---
 
-- Paste your MangaDex information at the top
-- Choose a location to export the .xlsx files to
-- Choose what you want to export. You can export individual files or your entire library
+## Quick Start (Beginner)
 
+1) Double‑click `run_importer.bat`
+2) Enter base URL (e.g. `http://127.0.0.1:4567`)
+3) Choose to fetch follows, enter MangaDex credentials
+4) Choose status mapping and/or chapter sync (optional)
+5) Run a dry‑run first; then run again without dry‑run to apply
 
-# 2. Choose the external website to export your files to:
-MAL: Grab your user_id by exporting your list (https://myanimelist.net/panel.php?go=export), extracting the .gz file and opening the .xml file with notes or another program. Format should look like this:
+Full instructions live in USER_MANUAL.md.
 
+---
+
+## Usage (Direct Python)
+
+Import follows + statuses + chapters (dry run):
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+  --base-url http://127.0.0.1:4567 `
+  --from-follows `
+  --md-username USER `
+  --md-password PASS `
+  --import-reading-status `
+  --status-category-map completed=5,reading=2,on_hold=7,dropped=8,plan_to_read=9 `
+  --import-read-chapters `
+  --read-sync-delay 1 `
+  --dry-run
 ```
-		<myinfo>
-			<user_id>123456</user_id>
-			<user_name>YourMALname</user_name>
-			<user_export_type>2</user_export_type>
-			<user_total_manga>2345</user_total_manga>
-			<user_total_reading>678</user_total_reading>
-			<user_total_completed>901</user_total_completed>
-			<user_total_onhold>234</user_total_onhold>
-			<user_total_dropped>567</user_total_dropped>
-			<user_total_plantoread>0</user_total_plantoread>
-		</myinfo>
+
+Apply changes: remove `--dry-run`.
+
+List categories:
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+  --base-url http://127.0.0.1:4567 `
+  --list-categories
 ```
 
-Run *Convert .xlsx to .xml MAL.py* and use that user_id. Choose the proper .xlsx file with the proper status and convert to .xml.
+---
 
-The following sites use .xml to import:
+## Migrate Existing Library (Rehome)
 
-- AniList: https://anilist.co/settings/import
-- Anime-Planet: https://www.anime-planet.com/users/import_list.php
-- Kitsu: https://kitsu.app/settings/imports
-- MAL: https://myanimelist.net/import.php
+Add an alternative source for entries with few/zero chapters (dry run):
 
-For Mangaupdates, you run *Mangaupdates MD List.py* and use your normal login details.
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+  --base-url http://127.0.0.1:4567 `
+  --migrate-library `
+  --migrate-threshold-chapters 1 `
+  --migrate-sources "weeb central,mangapark" `
+  --dry-run
+```
 
+Apply changes and remove the original after success:
 
-# Don't forget to support the Author/Artist
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+  --base-url http://127.0.0.1:4567 `
+  --migrate-library `
+  --migrate-threshold-chapters 1 `
+  --migrate-sources "weeb central,mangapark" `
+  --migrate-remove
+```
 
+Tips:
 
-## YouTube Visual version:
+- Use `--debug-library` to see which API/GraphQL paths are used
+- The tool deduplicates across categories and uses best‑effort chapter counting
 
-[![YouTube Visual version](https://i.ytimg.com/vi/u0VuEufNFfY/maxresdefault.jpg)](https://www.youtube.com/watch?v=u0VuEufNFfY)
+---
 
-# - B O N U S -
+## Troubleshooting
 
-Anime recommendations:
-- https://www.reddit.com/user/theanimesyndicate/m/completedanimecollection_can/
-- https://discord.gg/RQsUfqNXJ9
+- Use `--dry-run` to preview actions
+- `--debug-follows` shows MangaDex follow pagination
+- `--status-map-debug` explains status mapping decisions
+- `--debug-library` prints Suwayomi library discovery and chapter count paths
 
-Manga Recommendations: 
-- https://www.reddit.com/user/mangasyndicate/m/completedmangacollection_can/
-- https://discord.gg/SMzR6zzXFu
+If you need help, see USER_MANUAL.md → “Troubleshooting” and “Getting Help”.
+
+---
+
+## License
+
+This project is provided as‑is without warranty. Respect site and content policies, and support authors/artists.
