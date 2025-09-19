@@ -74,6 +74,144 @@ Notes about connections/authentication:
 
 ---
 
+## 4.0 Common Scenarios (Copy/Paste)
+
+These are ready-to-use commands for the most common tasks. Replace the base URL if your server isn’t on the default.
+
+1. Upgrade zero‑chapter items by adding a better source (keep originals)
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --migrate-library `
+   --migrate-threshold-chapters 1 `
+   --migrate-sources "bato.to,mangabuddy,weeb central,mangapark" `
+   --migrate-preferred-only `
+   --best-source `
+   --best-source-canonical `
+   --best-source-candidates 4 `
+   --min-chapters-per-alt 5 `
+   --migrate-max-sources-per-site 3 `
+   --migrate-timeout 25
+```
+
+1. Remove zero‑chapter duplicates if the full/partial duplicate already exists
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --migrate-library `
+   --migrate-threshold-chapters 1 `
+   --migrate-sources "bato.to,mangabuddy" `
+   --migrate-preferred-only `
+   --best-source `
+   --best-source-canonical `
+   --best-source-candidates 4 `
+   --min-chapters-per-alt 5 `
+   --migrate-max-sources-per-site 3 `
+   --migrate-timeout 25 `
+   --migrate-remove-if-duplicate
+```
+
+1. Do both at once: add the better source, then remove the zero‑chapter original
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --migrate-library `
+   --migrate-threshold-chapters 1 `
+   --migrate-sources "bato.to,mangabuddy,weeb central,mangapark" `
+   --migrate-preferred-only `
+   --best-source `
+   --best-source-canonical `
+   --best-source-candidates 4 `
+   --min-chapters-per-alt 5 `
+   --migrate-max-sources-per-site 3 `
+   --migrate-timeout 25 `
+   --migrate-remove
+```
+
+1. Hard prune (no searching): keep the best entry per title, remove the rest with 0 chapters
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --prune-zero-duplicates `
+   --prune-threshold-chapters 1 `
+   --dry-run
+```
+
+Tip: Remove `--dry-run` to actually delete. Add `--prune-filter-title "substring"` to target one series.
+
+1. Prefer English when migrating (avoid other languages where possible)
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --migrate-library `
+   --migrate-threshold-chapters 1 `
+   --migrate-sources "bato.to,mangabuddy,weeb central,mangapark" `
+   --migrate-preferred-only `
+   --best-source `
+   --best-source-canonical `
+   --preferred-langs "en,en-us" `
+   --lang-fallback `
+   --migrate-remove
+```
+
+This scores candidates by English chapters first; if a site has zero English chapters, it will fall back to total chapters only if `--lang-fallback` is present.
+
+1. Cleanup: remove non-English variants when an English one exists (no searching)
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --prune-nonpreferred-langs `
+   --preferred-langs "en,en-us" `
+   --prune-filter-title "Solo Leveling: Ragnarok" `
+   --dry-run
+```
+
+Then re-run without `--dry-run` to actually delete the non-English duplicates.
+
+To convert 0-chapter entries into English sources in one go: first migrate with language preference, then remove the zero-chapter originals:
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --migrate-library `
+   --migrate-threshold-chapters 1 `
+   --migrate-sources "bato.to,mangabuddy,weeb central,mangapark" `
+   --migrate-preferred-only `
+   --best-source `
+   --best-source-canonical `
+   --preferred-langs "en,en-us" `
+   --lang-fallback `
+   --migrate-remove
+```
+
+1. Test on a single title first (recommended)
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --migrate-library `
+   --migrate-filter-title "Shinimodori Level Up" `
+   --dry-run
+```
+
+Notes:
+
+- Put your preferred site first (e.g., `bato.to`), fallback second (e.g., `mangabuddy`).
+- Keep `--best-source-canonical` on so split/alt releases are counted together.
+- Use `--migrate-remove-if-duplicate` if you want to only remove the zero‑chapter one when a duplicate already exists.
+- Use `--migrate-remove` if you want to replace zero‑chapter entries with the alternative you just added.
+- Add `--exclude-sources "comick,hitomi"` if you don’t want those mirrors.
+- For a search-free cleanup, use the hard prune command above; it keeps the title variant with the most chapters and removes other zero-chapter variants.
+- Only migrate specific categories: add `--migrate-include-categories "Reading,On Hold"` or by id `--migrate-include-categories "5,7"`. To skip categories instead use `--migrate-exclude-categories`.
+- Prefer specific languages during migration with `--preferred-langs "en,en-us"`. Add `--lang-fallback` if you want to consider non-preferred languages when none match.
+- Remove non-preferred language duplicates later with `--prune-nonpreferred-langs --preferred-langs "en,en-us"` (can be limited by `--prune-filter-title`).
+
 ## 4.1 Migrate Library (Rehome Delisted/Empty Sources)
 
 If you already have a Suwayomi library and want to add an alternative source entry for series that have 0 (or very few) chapters on their current source, use migrate mode. This is ideal when MangaDex entries are delisted/empty.
@@ -101,12 +239,44 @@ python import_mangadex_bookmarks_to_suwayomi.py `
    --migrate-remove
 ```
 
+Avoid zero‑chapter duplicates when a full/partial duplicate already exists:
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --migrate-library `
+   --migrate-threshold-chapters 1 `
+   --migrate-sources "bato.to,mangabuddy,weeb central,mangapark" `
+   --migrate-preferred-only `
+   --best-source `
+   --best-source-canonical `
+   --best-source-candidates 4 `
+   --min-chapters-per-alt 5 `
+   --exclude-sources "comick,hitomi" `
+   --migrate-max-sources-per-site 3 `
+   --migrate-timeout 25 `
+   --migrate-remove-if-duplicate
+```
+
+Focus on one title while testing:
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --migrate-library `
+   --migrate-filter-title "Shinimodori Level Up" `
+   --dry-run
+```
+
 Notes:
 
 - The tool discovers your library through GraphQL (categories first) and deduplicates across categories.
 - Chapter count is computed from available endpoints; if chapter endpoints need auth on your server, the tool will fall back to GraphQL and best-effort counting.
 - You can add `--debug-library` to print which endpoints and GraphQL fields were used.
 - Default excluded sources: `--exclude-sources "comick,hitomi"`. Adjust if you want to exclude more.
+- Put your preferred site first (e.g., `bato.to`) and the fallback next (e.g., `mangabuddy`). If two sites tie on chapters, earlier site wins.
+- Keep `--best-source-canonical` on so split/alt releases count correctly.
+- Limit per-site work with `--migrate-max-sources-per-site 3`; use `--migrate-try-second-page` only if a site often hides results on page 2.
 
 ---
 
@@ -279,12 +449,119 @@ python import_mangadex_bookmarks_to_suwayomi.py `
 - Reading status: `--import-reading-status`, `--status-category-map`, `--status-default-category`, `--assume-missing-status`, `--ignore-statuses`, `--print-status-summary`, `--debug-status`, `--status-endpoint-raw`, `--status-fallback-single`, `--status-fallback-throttle`, `--export-statuses`, `--include-library-statuses`, `--library-statuses-only`
 - Chapter progress: `--import-read-chapters`, `--read-chapters-dry-run`, `--read-sync-delay`, `--max-read-requests-per-minute`
 - Lists: `--import-lists`, `--list-lists`, `--lists-category-map`, `--lists-ignore`, `--debug-lists`
-- Migration/Rehoming (existing library): `--migrate-library`, `--migrate-threshold-chapters`, `--migrate-sources`, `--migrate-remove`, `--debug-library`
+- Migration/Rehoming (existing library): `--migrate-library`, `--migrate-threshold-chapters`, `--migrate-sources`, `--migrate-remove`, `--migrate-remove-if-duplicate`, `--migrate-filter-title`, `--migrate-max-sources-per-site`, `--migrate-try-second-page`, `--migrate-timeout`, `--best-source`, `--best-source-global`, `--best-source-candidates`, `--best-source-canonical`, `--min-chapters-per-alt`, `--debug-library`
+- Migration filtering: `--migrate-include-categories`, `--migrate-exclude-categories`
+- Prune (no searching): `--prune-zero-duplicates`, `--prune-threshold-chapters`, `--prune-filter-title`
+   - Language cleanup: `--prune-nonpreferred-langs`, `--prune-lang-threshold`
+- Language preference: `--preferred-langs`, `--lang-fallback`
 - Rehoming during import (optional path used when MangaDex has 0 chapters): `--rehoming-enabled`, `--rehoming-sources`, `--rehoming-skip-if-chapters-ge`, `--rehoming-remove-mangadex`
 
 Tip: When using PowerShell, line continuation is the backtick (`). In cmd.exe use ^ instead, or put the whole command on one line.
 
 ---
+
+## 8.4 Flag Glossary (Plain English)
+
+Short, non-technical explanations of the most-used flags. Use the examples first; check this list only when you’re curious what a flag means.
+
+- --base-url: Where your Suwayomi server is. On your own PC: <http://127.0.0.1:4567>
+- --dry-run: Test only. Shows what would happen—no changes made.
+- --no-progress: Make the output quieter (fewer lines printed).
+- --throttle N: Wait N seconds between items (helps slow servers).
+- --category-id N: Also add each imported manga to category N (optional).
+- --no-title-fallback: Don’t try searching by title if searching by ID fails.
+
+Suwayomi login (only if needed)
+
+- --auth-mode: How to log in (auto is fine). Options: auto, basic, simple, bearer
+- --username / --password: Your Suwayomi sign-in
+- --token: A Suwayomi API token (alternative to user/pass)
+- --insecure: Skip HTTPS checks (only for trusted/local setups)
+
+MangaDex login (for getting your follows / read markers)
+
+- --md-username / --md-password: Your MangaDex sign-in
+- --md-client-id / --md-client-secret: Advanced keys (usually not needed)
+- --md-2fa: Your 2FA code, if you have two-factor enabled
+
+Follows input
+
+- --from-follows: Fetch your followed manga directly from MangaDex
+- --follows-json FILE: Use a saved file instead of live MangaDex
+- --max-follows N: Only process the first N follows (good for testing)
+- --debug-follows: Show detailed loading steps (for troubleshooting)
+
+Reading status mapping (optional)
+
+- --import-reading-status: Put manga into categories that match your MD status
+- --status-category-map: Tell the tool which category equals which status (e.g., reading=2)
+- --status-default-category N: If a status isn’t mapped, put it in category N
+- --assume-missing-status NAME: If missing, pretend the status is NAME (e.g., reading)
+- --ignore-statuses LIST: Don’t apply statuses for these (e.g., dropped,on_hold)
+- --print-status-summary: Print a short count of statuses found
+- --status-endpoint-raw / --debug-status: Extra detail to debug status fetching
+- --status-fallback-single / --status-fallback-throttle: Advanced, slower fallback
+- --export-statuses FILE: Save fetched statuses to a file for your records
+- --include-library-statuses / --library-statuses-only: Include or limit to what’s already in Suwayomi
+
+Chapter progress (optional)
+
+- --import-read-chapters: Mark chapters as read to match MangaDex
+- --read-chapters-dry-run: Test chapter marking without saving
+- --read-sync-delay N: Wait N seconds so chapters load before marking
+- --max-read-requests-per-minute N: Slow down to avoid overloading the server
+
+Lists (optional)
+
+- --import-lists: Import your MangaDex custom lists
+- --list-lists: Show your list names
+- --lists-category-map: Put items from a given list into a specific category
+- --lists-ignore: Skip certain list names
+- --debug-lists: Print details while loading lists
+
+Migration/Rehoming (fix 0- or low-chapter entries already in Suwayomi)
+
+- --migrate-library: Scan your current Suwayomi library to add a better source
+- --migrate-threshold-chapters N: Only migrate items with fewer than N chapters (1 = only zero-chapter)
+- --migrate-sources "A,B,C": Sites to try, in order of preference (earlier wins ties)
+- --migrate-preferred-only: Only try the sites you listed
+- --exclude-sources "X,Y": Never use sites whose names include these
+- --best-source: On each site, pick the candidate with the most chapters
+- --best-source-canonical: Count split/alt releases together when comparing
+- --best-source-global: Compare across all sites (slower but thorough)
+- --best-source-candidates N: Only inspect the first N results per site
+- --min-chapters-per-alt N: Require at least N chapters to consider a candidate
+- --migrate-max-sources-per-site N: Only try N candidates per site (faster)
+- --migrate-try-second-page: Also check page 2 (use only if needed; slower)
+- --migrate-timeout N: Give up on a single title after N seconds (keeps run going)
+- --migrate-filter-title "text": Only process titles containing this text (great for testing)
+- --migrate-include-categories "A,B" or "1,2": Only migrate items in these categories (names or numeric IDs)
+- --migrate-exclude-categories "A,B" or "1,2": Skip items in these categories (names or numeric IDs)
+- --migrate-remove: After adding a good alternative, delete the original entry
+- --migrate-remove-if-duplicate: If the chosen alternative already exists in your library and has chapters, delete the zero/low-chapter original instead of adding another copy
+- --debug-library: Show searches and candidate scores for troubleshooting
+
+Language preference (scoring)
+
+- --preferred-langs "A,B,C": Comma-separated language codes to prefer when counting chapters (e.g., en,en-us,id). Matches exact or base (en matches en-us).
+- --lang-fallback: If a candidate has zero chapters in preferred languages, allow scoring by total chapters as a fallback.
+
+Rehoming during import (advanced, optional)
+
+- --rehoming-enabled: While importing a MangaDex item with 0 chapters, also try a preferred site
+- --rehoming-sources "A,B,C": Which sites to try for rehoming
+- --rehoming-skip-if-chapters-ge N: Skip if MangaDex already has at least N chapters
+- --rehoming-remove-mangadex: If rehoming worked, remove the MangaDex entry
+
+---
+
+Prune-only (no searching)
+
+- --prune-zero-duplicates: Remove zero/low-chapter entries when another entry with the same title has chapters.
+- --prune-threshold-chapters N: Consider entries with >= N chapters as the “keepers” (default 1). Others get removed.
+- --prune-filter-title "text": Only act on titles containing this text.
+- --prune-nonpreferred-langs: Remove entries whose chapters do not match preferred languages when a same-title entry has preferred-language chapters.
+- --prune-lang-threshold N: Minimum preferred-language chapters to treat an entry as keepable (default 1).
 
 ## 9. Troubleshooting
 

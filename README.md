@@ -13,6 +13,9 @@ This project is a standalone fork focused solely on MangaDex → Suwayomi. For a
 - Sync read chapter markers to match MangaDex
 - Import from a local list file as an alternative to live follows
 - Migrate existing Suwayomi library entries to alternative sources (e.g., Weeb Central, MangaPark) when the current source has few/zero chapters
+- Prefer a specific site order and pick the best candidate by chapter count (canonical-aware)
+- Remove zero-chapter duplicates automatically when a full/partial duplicate already exists (`--migrate-remove-if-duplicate`)
+- Filter migration to a single title substring for quick checks (`--migrate-filter-title`)
 - Diagnostics and dry‑run mode to preview actions safely
 
 ---
@@ -101,7 +104,38 @@ python import_mangadex_bookmarks_to_suwayomi.py `
 Tips:
 
 - Use `--debug-library` to see which API/GraphQL paths are used
-- The tool deduplicates across categories and uses best‑effort chapter counting
+- Use `--best-source` to score by chapter count (add `--best-source-canonical` to treat split/alt releases as one)
+- Use `--best-source-global` to compare across all preferred sites; without it, the first site to meet your minimum wins
+- Set `--best-source-candidates 3` to limit per-site scoring; raise if the correct series is often not first
+- Set `--min-chapters-per-alt 5` (or similar) to avoid selecting low-content mirrors
+- Limit exploration per site with `--migrate-max-sources-per-site 3` and use `--migrate-try-second-page` only when needed
+- Use `--migrate-filter-title "substring"` to focus on a single problematic series
+- Avoid clutter by adding `--migrate-remove-if-duplicate` so the original zero‑chapter entry is removed when the chosen alternative already exists in your library with chapters
+- The tool deduplicates across categories and uses best‑effort chapter counting (falls back to GraphQL if REST is unavailable)
+
+Example: Prefer Bato, fallback to Mangabuddy (fast per‑site mode)
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+  --base-url http://127.0.0.1:4567 `
+  --migrate-library `
+  --migrate-sources "bato.to,mangabuddy,weeb central,mangapark" `
+  --migrate-preferred-only `
+  --best-source `
+  --best-source-canonical `
+  --best-source-candidates 4 `
+  --min-chapters-per-alt 5 `
+  --exclude-sources "comick,hitomi" `
+  --migrate-max-sources-per-site 3 `
+  --migrate-timeout 25 `
+  --migrate-remove-if-duplicate
+```
+
+Diagnostics during migration
+
+- Add `--debug-library` to print per-site searches and candidate scores like:
+  - `cand id=12345 site='bato.to' score=107 title='...'`
+  This helps you see why a site won and whether a source returned no results.
 - Default excluded sources: `--exclude-sources "comick,hitomi"` (you can add more fragments)
 
 ---

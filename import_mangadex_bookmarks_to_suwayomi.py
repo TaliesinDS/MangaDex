@@ -7,7 +7,7 @@ import os
 import getpass
 import time
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple, Dict, Any
+from typing import Iterable, List, Optional, Tuple, Dict, Any, Set
 
 try:
     import pandas as pd  # Optional, only used for xlsx/csv convenience
@@ -99,13 +99,13 @@ class SuwayomiClient:
     def __init__(self, base_url: str, auth_mode: str = "auto", username: Optional[str] = None, password: Optional[str] = None, token: Optional[str] = None, verify_tls: bool = True, request_timeout: float = 12.0):
         self.base_url = base_url.rstrip('/')
         self.sess = requests.Session()
-        self.verify = verify_tls
-        self.timeout = request_timeout
         self.headers: Dict[str, str] = {}
         self.auth_mode = auth_mode
         self.username = username
         self.password = password
         self.token = token
+        self.verify = verify_tls
+        self.timeout = request_timeout
 
     def _auth(self):
         # Modes: basic, simple, bearer, auto
@@ -163,6 +163,51 @@ class SuwayomiClient:
         # Endpoint adds manga to category via GET per server API design
         r = self.request("GET", f"/api/v1/manga/{manga_id}/category/{category_id}")
         return r.status_code == 200
+
+    # Utilities to normalize varied server search responses
+    @staticmethod
+    def normalize_search_items(payload: Any) -> List[Dict[str, Any]]:
+        if payload is None:
+            return []
+        if isinstance(payload, list):
+            return [x for x in payload if isinstance(x, dict)]
+        if isinstance(payload, dict):
+            # Common keys across forks
+            for k in (
+                'mangaList','mangaListData','manga_list','results','data','list','items','entries','mangas','manga'
+            ):
+                v = payload.get(k)
+                if isinstance(v, list):
+                    return [x for x in v if isinstance(x, dict)]
+            # Some APIs embed under an extra layer
+            for k in ('data','result'):
+                v = payload.get(k)
+                if isinstance(v, dict):
+                    for kk in ('items','list','results','mangaList','manga'):
+                        vv = v.get(kk)
+                        if isinstance(vv, list):
+                            return [x for x in vv if isinstance(x, dict)]
+        return []
+
+    @staticmethod
+    def extract_manga_id(item: Dict[str, Any]) -> Optional[int]:
+        for k in ('id','mangaId','manga_id','manga_id_str'):
+            v = item.get(k)
+            if v is None:
+                continue
+            try:
+                return int(v)
+            except Exception:
+                continue
+        v = item.get('sourceId') or item.get('source_id') or item.get('key') or item.get('url')
+        if isinstance(v, str):
+            m = re.search(r"(\d{2,})", v)
+            if m:
+                try:
+                    return int(m.group(1))
+                except Exception:
+                    pass
+        return None
 
     # Additional helpers for rehoming/migration
     def get_manga_details(self, manga_id: int) -> Dict[str, Any]:
@@ -248,6 +293,140 @@ class SuwayomiClient:
         except Exception:
             pass
         return 0
+        return 0
+
+    def get_manga_chapters_entries(self, manga_id: int) -> List[Dict[str, Any]]:
+        """Return a best-effort list of chapter dicts using REST endpoints.
+        Does not rely on GraphQL since shapes vary widely."""
+        def to_list(js: Any) -> List[Dict[str, Any]]:
+            if isinstance(js, list):
+                return [x for x in js if isinstance(x, dict)]
+            if isinstance(js, dict):
+                for k in ("chapters", "data", "list", "items"):
+                    v = js.get(k)
+                    if isinstance(v, list):
+                        return [x for x in v if isinstance(x, dict)]
+            return []
+        # Try chapters endpoints
+        for ep in (f"/api/v1/manga/{manga_id}/chapters", f"/api/v1/manga/{manga_id}/chapter"):
+            try:
+                r = self.request("GET", ep)
+                if r.status_code != 200:
+                    continue
+                try:
+                    js = r.json()
+                except Exception:
+                    continue
+                items = to_list(js)
+                if items:
+                    return items
+            except Exception:
+                pass
+        # Try details with chapters included
+        for ep in (f"/api/v1/manga/{manga_id}?withChapters=true", f"/api/v1/manga/{manga_id}"):
+            try:
+                r = self.request("GET", ep)
+                if r.status_code != 200:
+                    continue
+                try:
+                    js = r.json()
+                except Exception:
+                    continue
+                if isinstance(js, dict):
+                    items = to_list(js.get("chapters")) if isinstance(js.get("chapters"), list) else to_list(js)
+                    if items:
+                        return items
+            except Exception:
+                pass
+        return []
+
+    @staticmethod
+    def _canonical_key_from_chapter(item: Dict[str, Any]) -> Optional[str]:
+        """Extract canonical key from a chapter item. Convert 12.3 -> 12; handle strings like 'Ch. 12.4'.
+        Returns None if no usable numeric identifier found.
+        """
+        # Candidate fields by common API shapes
+        vals: List[str] = []
+        for k in ("chapter", "chapterNumber", "number", "name", "title"):
+            v = item.get(k)
+            if v is None:
+                continue
+            if isinstance(v, (int, float)):
+                # Take integer part as canonical
+                try:
+                    n = int(float(v))
+                    return str(n)
+                except Exception:
+                    continue
+            if isinstance(v, str):
+                vals.append(v)
+        for s in vals:
+            # Find first numeric token
+            m = re.search(r"(\d+)(?:[\.-]\d+)?", s)
+            if not m:
+                continue
+            try:
+                base = int(m.group(1))
+                return str(base)
+            except Exception:
+                continue
+        # Common labels to skip
+        lab = (item.get("name") or item.get("title") or "").lower()
+        if any(x in lab for x in ("oneshot", "special", "extra")):
+            return None
+        return None
+
+    def get_manga_chapters_canonical_count(self, manga_id: int) -> int:
+        """Count unique canonical chapter numbers, collapsing segmented releases (1.1/1.2 => 1).
+        Falls back to total count if no canonical numbers could be parsed but chapters exist."""
+        items = self.get_manga_chapters_entries(manga_id)
+        if not items:
+            return 0
+        uniq: set = set()
+        for it in items:
+            key = self._canonical_key_from_chapter(it)
+            if key is not None:
+                uniq.add(key)
+        if uniq:
+            return len(uniq)
+        # Fallback: if we couldn't parse, return total as last resort
+        return len(items)
+
+    # --- Language helpers for chapter lists ---
+    @staticmethod
+    def _norm_lang(v: Any) -> str:
+        s = str(v or "").strip().lower().replace('_', '-')
+        return s
+
+    def _filter_items_by_lang(self, items: List[Dict[str, Any]], langs: Set[str]) -> List[Dict[str, Any]]:
+        if not items or not langs:
+            return items or []
+        base_langs = {l.split('-')[0] for l in langs}
+        out: List[Dict[str, Any]] = []
+        for it in items:
+            lv = it.get('language') or it.get('lang') or it.get('translatedLanguage') or it.get('languageCode') or ""
+            ln = self._norm_lang(lv)
+            if ln in langs:
+                out.append(it)
+                continue
+            base = ln.split('-')[0] if ln else ''
+            if base and base in base_langs:
+                out.append(it)
+        return out
+
+    def get_manga_chapters_count_by_lang(self, manga_id: int, langs: Set[str], canonical: bool = False) -> int:
+        items = self.get_manga_chapters_entries(manga_id)
+        items = self._filter_items_by_lang(items, langs)
+        if not items:
+            return 0
+        if canonical:
+            seen: Set[str] = set()
+            for it in items:
+                key = self._canonical_key_from_chapter(it)
+                if key:
+                    seen.add(key)
+            return len(seen) if seen else len(items)
+        return len(items)
 
     def remove_from_library(self, manga_id: int) -> bool:
         # Some builds support DELETE; provide GET fallback path if needed
@@ -751,7 +930,6 @@ def import_ids(
                                 target_cat = status_category_map.get(assume_missing_status.lower())
                                 via = 'assumed'
                         else:
-                            # No effective status (e.g., ignored or missing). Use default if provided.
                             if status_default_category is not None:
                                 target_cat = status_default_category
                                 via = 'default'
@@ -858,8 +1036,8 @@ def import_ids(
                             pref = [s.strip().lower() for s in (rehome_conf.get('sources') or []) if s.strip()]
                             # Load all sources
                             all_sources = client.get_sources()
-                            # Exclude unwanted sources by name/apkName
-                            exclude_frags = [s.strip().lower() for s in (args.exclude_sources.split(',') if args.exclude_sources else []) if s.strip()]
+                            # Exclude unwanted sources by name/apkName (from rehome_conf)
+                            exclude_frags = [f for f in (rehome_conf.get('exclude_frags') or []) if f]
                             if exclude_frags:
                                 _tmp = []
                                 for _s in all_sources:
@@ -890,18 +1068,41 @@ def import_ids(
                                     search = client.search_source(rid, title, page=1)
                                 except Exception:
                                     continue
-                                items = search.get('mangaList') or search.get('mangaListData') or search.get('manga_list') or []
+                                items = SuwayomiClient.normalize_search_items(search)
                                 if not items:
                                     continue
-                                # take first match
-                                alt = items[0]
-                                try:
-                                    alt_id = int(alt.get('id'))
-                                except Exception:
+                                # pick best candidate by chapter count if enabled
+                                alt_id = None
+                                if rehome_conf.get('best_source'):
+                                    best_count = -1
+                                    limit = int(rehome_conf.get('best_candidates') or 5)
+                                    for cand in items[:max(1, limit)]:
+                                        cid = SuwayomiClient.extract_manga_id(cand)
+                                        if cid is None:
+                                            continue
+                                        cnt = 0
+                                        try:
+                                            if rehome_conf.get('canonical'):
+                                                cnt = client.get_manga_chapters_canonical_count(cid)
+                                            else:
+                                                cnt = client.get_manga_chapters_count(cid)
+                                        except Exception:
+                                            cnt = 0
+                                        if cnt >= int(rehome_conf.get('min_chapters_per_alt') or 0) and cnt > best_count:
+                                            best_count = cnt
+                                            alt_id = cid
+                                else:
+                                    alt_id = SuwayomiClient.extract_manga_id(items[0])
+                                if alt_id is None and int(rehome_conf.get('min_chapters_per_alt') or 0) <= 0 and items:
+                                    alt_id = SuwayomiClient.extract_manga_id(items[0])
+                                if alt_id is None:
                                     continue
                                 added_alt = client.add_to_library(alt_id)
                                 if show_progress:
-                                    print(f"{prefix}REHOME via '{src.get('name')}' -> {'OK' if added_alt else 'FAIL'}")
+                                    msg = f"{prefix}REHOME via '{src.get('name')}'"
+                                    if rehome_conf.get('best_source'):
+                                        msg += " (best-source)"
+                                    print(f"{msg} -> {'OK' if added_alt else 'FAIL'}")
                                 if added_alt and rehome_conf.get('remove_md'):
                                     try:
                                         rm_ok = client.remove_from_library(manga_id)
@@ -1355,17 +1556,38 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--migrate-sources", help="Preferred alternative sources (comma-separated fragments). If omitted, uses --rehoming-sources")
     p.add_argument("--exclude-sources", default="comick,hitomi", help="Comma-separated source name fragments to always exclude (default: 'comick,hitomi')")
     p.add_argument("--migrate-remove", action="store_true", help="Remove the original library entry after a successful migration")
+    p.add_argument("--migrate-remove-if-duplicate", action="store_true", help="If the selected alternative already exists in the library and has >0 chapters, remove the original zero/low-chapter entry instead of adding a duplicate")
     p.add_argument("--debug-library", action="store_true", help="Verbose diagnostics for library and chapter listing endpoints during migration")
     p.add_argument("--request-timeout", type=float, default=12.0, help="Default HTTP request timeout in seconds (default 12)")
     p.add_argument("--migrate-timeout", type=float, default=20.0, help="Max seconds to spend trying sources for a single migration item (default 20)")
     p.add_argument("--migrate-max-sources-per-site", type=int, default=3, help="Limit attempts per site name (e.g. 'mangapark') to this many different source IDs (default 3)")
     p.add_argument("--migrate-try-second-page", action="store_true", help="Try page 2 if page 1 had no results (slower)")
+    p.add_argument("--migrate-filter-title", help="Only process library entries whose title contains this substring (case-insensitive)")
+    p.add_argument("--migrate-preferred-only", action="store_true", help="When set and --migrate-sources provided, restrict search to only those sources (by name fragments)")
+    p.add_argument("--preferred-langs", help="Comma-separated language codes to prefer when counting chapters (e.g. 'en,en-us,id'). If set, candidates are scored by chapters in these languages")
+    p.add_argument("--lang-fallback", action="store_true", help="If no chapters match preferred languages for a candidate, allow non-preferred counts as fallback")
+    p.add_argument("--migrate-include-categories", help="Comma-separated category IDs or names; only entries in at least one of these categories will be migrated")
+    p.add_argument("--migrate-exclude-categories", help="Comma-separated category IDs or names; entries in any of these categories will be skipped")
+    # Best source selection
+    p.add_argument("--best-source", action="store_true", help="Evaluate a few candidate sources and pick the one with the most chapters (opt-in)")
+    p.add_argument("--best-source-candidates", type=int, default=5, help="Max number of candidate manga entries to score per title when --best-source is enabled (default 5)")
+    p.add_argument("--min-chapters-per-alt", type=int, default=0, help="Require chosen alternative to have at least this many chapters; if not, try next candidate/result (default 0)")
+    p.add_argument("--best-source-canonical", action="store_true", help="Score by unique canonical chapter numbers (collapse 1.1/1.2 to 1)")
+    p.add_argument("--best-source-global", action="store_true", help="When set, consider all preferred sources and pick the single best candidate overall instead of stopping at the first site that qualifies")
     # Custom lists support
     p.add_argument("--import-lists", action="store_true", help="Fetch MangaDex custom lists and map list names to categories")
     p.add_argument("--list-lists", action="store_true", help="List your MangaDex custom lists (id + name) and exit")
     p.add_argument("--lists-category-map", help="Comma list mapping ListName=categoryId (e.g. Dropped=7,On Hold=5,Plan to Read=8,Completed=9,Reading=4)")
     p.add_argument("--lists-ignore", help="Comma-separated list names to ignore when importing lists (e.g. Reading)")
     p.add_argument("--debug-lists", action="store_true", help="Verbose output for custom lists fetching and mapping decisions")
+
+    # Prune-only mode (hard prune duplicates without searching)
+    p.add_argument("--prune-zero-duplicates", action="store_true", help="Remove zero/low-chapter entries when another entry with the same title already exists with >= --prune-threshold-chapters chapters (no searching)")
+    p.add_argument("--prune-threshold-chapters", type=int, default=1, help="Threshold for considering an entry 'kept'. Entries with chapters < this value are pruned if a matching-title entry has >= this value (default 1, i.e., keep entries with >=1 chapter)")
+    p.add_argument("--prune-filter-title", help="Only consider titles containing this substring (case-insensitive) during prune")
+    p.add_argument("--prune-nonpreferred-langs", action="store_true", help="Remove entries whose chapters don't match --preferred-langs when another same-title entry has chapters in the preferred language(s)")
+    p.add_argument("--prune-lang-threshold", type=int, default=1, help="Minimum number of preferred-language chapters required to consider an entry a keeper (default 1)")
+    p.add_argument("--prune-lang-fallback-keep-most", action="store_true", help="If no entries have preferred-language chapters in a title group, keep only the entry with the highest total chapter count and prune the rest")
 
     args = p.parse_args(argv)
 
@@ -1438,8 +1660,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                     ids.append(mid)
                     seen.add(mid)
 
-    if not ids and not args.list_categories and not args.migrate_library:
-        print("No MangaDex IDs to process (empty file and no follows fetched). Use --migrate-library to operate only on Suwayomi.")
+    if not ids and not args.list_categories and not args.migrate_library and not getattr(args, 'prune_zero_duplicates', False) and not getattr(args, 'prune_nonpreferred_langs', False):
+        print("No MangaDex IDs to process (empty file and no follows fetched). Use --migrate-library or a prune mode to operate only on Suwayomi.")
         return 1
 
     # Optional presence verification of specific IDs
@@ -1713,6 +1935,166 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"Error retrieving categories: {ce}")
             return 4
 
+    # Hard prune mode: remove zero/low-chapter duplicates without searching
+    if args.prune_zero_duplicates:
+        client_auth = SuwayomiClient(
+            base_url=args.base_url,
+            auth_mode=args.auth_mode,
+            username=args.username,
+            password=args.password,
+            token=args.token,
+            verify_tls=not args.insecure,
+            request_timeout=args.request_timeout,
+        )
+        client_auth._auth()
+        library = client_auth.get_library()
+        if not library:
+            print("Could not fetch library or library is empty.")
+            return 5
+        # Normalize titles
+        def norm(s: str) -> str:
+            s = (s or '').lower()
+            s = re.sub(r"[\(\[\{].*?[\)\]\}]", "", s)
+            s = re.sub(r"[^a-z0-9\s]", "", s)
+            return ' '.join(s.split())
+        # Group entries by normalized title
+        groups: Dict[str, list] = {}
+        for e in library:
+            title = str(e.get('title') or e.get('name') or '').strip()
+            if args.prune_filter_title and args.prune_filter_title.lower() not in title.lower():
+                continue
+            nid = norm(title)
+            groups.setdefault(nid, []).append(e)
+        removed = 0
+        kept = 0
+        threshold = max(0, int(args.prune_threshold_chapters))
+        for nid, items in groups.items():
+            # Get counts
+            with_counts = []
+            for e in items:
+                mid = e.get('id') or e.get('mangaId') or e.get('manga_id')
+                try:
+                    mid_int = int(mid)
+                except Exception:
+                    continue
+                try:
+                    cnt = client_auth.get_manga_chapters_count(mid_int)
+                except Exception:
+                    cnt = 0
+                with_counts.append((mid_int, cnt, e))
+            # Decide keeper(s): any with count >= threshold
+            keepers = [t for t in with_counts if (t[1] or 0) >= threshold]
+            if not keepers:
+                # Nothing to prune in this group
+                kept += len(with_counts)
+                continue
+            # Prefer the one with most chapters; keep ties
+            max_cnt = max(t[1] or 0 for t in keepers)
+            keep_set = {t[0] for t in keepers if (t[1] or 0) == max_cnt}
+            for mid_int, cnt, e in with_counts:
+                title = str(e.get('title') or e.get('name') or '').strip()
+                if mid_int in keep_set:
+                    kept += 1
+                    if not args.no_progress:
+                        print(f"KEEP '{title}' (chapters={cnt})")
+                else:
+                    if args.dry_run:
+                        removed += 1
+                        if not args.no_progress:
+                            print(f"PRUNE (dry-run) '{title}' (chapters={cnt})")
+                    else:
+                        ok = client_auth.remove_from_library(mid_int)
+                        removed += 1 if ok else 0
+                        if not args.no_progress:
+                            print(f"PRUNE '{title}' (chapters={cnt}) -> {'OK' if ok else 'FAIL'}")
+        print(f"Prune summary: kept={kept} removed={removed}")
+        return 0
+
+    # Prune non-preferred language entries when a preferred-language entry exists for the same title
+    if args.prune_nonpreferred_langs:
+        if not args.preferred_langs:
+            print("--prune-nonpreferred-langs requires --preferred-langs")
+            return 2
+        pref_langs = {s.strip().lower().replace('_','-') for s in args.preferred_langs.split(',') if s.strip()}
+        client_auth = SuwayomiClient(
+            base_url=args.base_url,
+            auth_mode=args.auth_mode,
+            username=args.username,
+            password=args.password,
+            token=args.token,
+            verify_tls=not args.insecure,
+            request_timeout=args.request_timeout,
+        )
+        client_auth._auth()
+        library = client_auth.get_library()
+        if not library:
+            print("Could not fetch library or library is empty.")
+            return 5
+        def norm(s: str) -> str:
+            s = (s or '').lower()
+            s = re.sub(r"[\(\[\{].*?[\)\]\}]", "", s)
+            s = re.sub(r"[^a-z0-9\s]", "", s)
+            return ' '.join(s.split())
+        groups: Dict[str, list] = {}
+        for e in library:
+            title = str(e.get('title') or e.get('name') or '').strip()
+            if args.prune_filter_title and args.prune_filter_title.lower() not in title.lower():
+                continue
+            nid = norm(title)
+            groups.setdefault(nid, []).append(e)
+        removed = 0
+        kept = 0
+        min_pref = max(1, int(args.prune_lang_threshold))
+        for nid, items in groups.items():
+            scored: List[Tuple[int, int, int, Dict[str, Any]]] = []  # (pref_count, total_count, id, entry)
+            for e in items:
+                mid = e.get('id') or e.get('mangaId') or e.get('manga_id')
+                try:
+                    mid_int = int(mid)
+                except Exception:
+                    continue
+                try:
+                    pref_count = client_auth.get_manga_chapters_count_by_lang(mid_int, pref_langs, canonical=False)
+                except Exception:
+                    pref_count = 0
+                try:
+                    total_count = client_auth.get_manga_chapters_count(mid_int)
+                except Exception:
+                    total_count = 0
+                scored.append((pref_count, total_count, mid_int, e))
+            # Keeper set: entries that meet preferred minimum; if none, keep the one with highest total
+            keep_set: Set[int] = set()
+            best_pref = max((p for (p, _, _, _) in scored), default=0)
+            if best_pref >= min_pref:
+                # Keep all that achieve the max preferred count (avoid deleting the top preferred variant if split)
+                keep_set = {mid for (p, _, mid, _) in ((p, t, m, e) for (p, t, m, e) in scored) if p == best_pref}
+            else:
+                # No preferred-language chapters found; optionally keep only the entry with most total
+                if args.prune_lang_fallback_keep_most and scored:
+                    max_total = max((t for (_, t, _, _) in scored), default=0)
+                    keep_set = {mid for (_, t, mid, _) in scored if t == max_total}
+                else:
+                    # Nothing to prune in this group
+                    keep_set = {mid for (_, _, mid, _) in scored}
+            for pref_count, total_count, mid_int, e in scored:
+                title = str(e.get('title') or e.get('name') or '').strip()
+                if mid_int in keep_set:
+                    kept += 1
+                    if not args.no_progress:
+                        print(f"KEEP '{title}' (pref={pref_count}, total={total_count})")
+                else:
+                    if args.dry_run:
+                        removed += 1
+                        if not args.no_progress:
+                            print(f"PRUNE (dry-run) '{title}' (pref={pref_count}, total={total_count})")
+                    else:
+                        ok = client_auth.remove_from_library(mid_int)
+                        removed += 1 if ok else 0
+                        if not args.no_progress:
+                            print(f"PRUNE '{title}' (pref={pref_count}, total={total_count}) -> {'OK' if ok else 'FAIL'}")
+        print(f"Prune by language summary: kept={kept} removed={removed}")
+        return 0
+
     # Standalone library migration flow (no MangaDex needed)
     if args.migrate_library:
         client_auth = SuwayomiClient(
@@ -1733,6 +2115,100 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 5
         if not args.no_progress:
             print(f"Library entries discovered: {len(library)}")
+        # Resolve category include/exclude filters
+        include_cat_tokens = [s.strip() for s in (args.migrate_include_categories.split(',') if args.migrate_include_categories else []) if s.strip()]
+        exclude_cat_tokens = [s.strip() for s in (args.migrate_exclude_categories.split(',') if args.migrate_exclude_categories else []) if s.strip()]
+        cat_name_by_id: Dict[int, str] = {}
+        cat_id_by_name: Dict[str, int] = {}
+        membership: Dict[int, Set[int]] = {}
+        if include_cat_tokens or exclude_cat_tokens:
+            # Fetch categories and build membership via GraphQL
+            try:
+                cats_res = client_auth.graphql("query { categories { nodes { id name } edges { node { id name } } } }")
+            except Exception:
+                cats_res = None
+            cat_ids: List[int] = []
+            if isinstance(cats_res, dict) and isinstance(cats_res.get('data'), dict):
+                root = cats_res['data'].get('categories') or {}
+                nodes = []
+                if isinstance(root, dict):
+                    nodes += [n for n in (root.get('nodes') or []) if isinstance(n, dict)]
+                    nodes += [e.get('node') for e in (root.get('edges') or []) if isinstance(e, dict) and isinstance(e.get('node'), dict)]
+                for n in nodes:
+                    try:
+                        cid = int(n.get('id'))
+                        nm = str(n.get('name') or '')
+                        cat_ids.append(cid)
+                        cat_name_by_id[cid] = nm
+                        if nm:
+                            cat_id_by_name[nm.strip().lower()] = cid
+                    except Exception:
+                        pass
+            # Build membership per category with basic pagination attempts
+            for cid in cat_ids:
+                # Use a few common pagination shapes
+                arg_shapes = [("page", "size"), ("page", "limit"), ("pageNum", "pageSize"), ("offset", "limit")]
+                page = 1
+                empty_pages = 0
+                while page <= 200:
+                    if arg_shapes[0][0] == "offset":
+                        vars = {"cid": int(cid), "offset": (page-1)*200, "limit": 200}
+                        q = "query($cid:Int,$offset:Int,$limit:Int){ category(id:$cid){ mangas(offset:$offset, limit:$limit){ nodes { id } edges { node { id } } } } }"
+                    elif arg_shapes[0][0] == "pageNum":
+                        vars = {"cid": int(cid), "pageNum": page, "pageSize": 200}
+                        q = "query($cid:Int,$pageNum:Int,$pageSize:Int){ category(id:$cid){ mangas(pageNum:$pageNum, pageSize:$pageSize){ nodes { id } edges { node { id } } } } }"
+                    else:
+                        vars = {"cid": int(cid), "page": page, "size": 200}
+                        q = "query($cid:Int,$page:Int,$size:Int){ category(id:$cid){ mangas(page:$page, size:$size){ nodes { id } edges { node { id } } } } }"
+                    res = client_auth.graphql(q, variables=vars)
+                    ids_this_page: List[int] = []
+                    try:
+                        nodes = (((res or {}).get('data') or {}).get('category') or {}).get('mangas') or {}
+                        raw = []
+                        if isinstance(nodes, dict):
+                            raw += [n for n in (nodes.get('nodes') or []) if isinstance(n, dict)]
+                            raw += [e.get('node') for e in (nodes.get('edges') or []) if isinstance(e, dict) and isinstance(e.get('node'), dict)]
+                        for it in raw:
+                            mid = it.get('id')
+                            if mid is None:
+                                continue
+                            try:
+                                mid_int = int(mid)
+                                membership.setdefault(mid_int, set()).add(int(cid))
+                                ids_this_page.append(mid_int)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                    if not ids_this_page:
+                        empty_pages += 1
+                        if empty_pages >= 2:
+                            break
+                    else:
+                        empty_pages = 0
+                    page += 1
+            # Build include/exclude sets of IDs
+            def tokens_to_ids(tokens: List[str]) -> Set[int]:
+                out: Set[int] = set()
+                for t in tokens:
+                    tl = t.strip().lower()
+                    if not tl:
+                        continue
+                    if tl.isdigit():
+                        out.add(int(tl))
+                    elif tl in cat_id_by_name:
+                        out.add(cat_id_by_name[tl])
+                return out
+            include_cat_ids = tokens_to_ids(include_cat_tokens)
+            exclude_cat_ids = tokens_to_ids(exclude_cat_tokens)
+        # Build a quick lookup of existing library internal IDs for duplicate detection
+        lib_ids: Set[int] = set()
+        for _e in library:
+            try:
+                _idv = int(_e.get('id') or _e.get('mangaId') or _e.get('manga_id'))
+                lib_ids.add(_idv)
+            except Exception:
+                pass
         # Prepare preferred sources
         pref_str = args.migrate_sources or args.rehoming_sources or ""
         pref = [s.strip().lower() for s in pref_str.split(',') if s.strip()]
@@ -1751,6 +2227,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                 if frag and frag in nm:
                     return i
             return 9999
+        # If requested, restrict to preferred list only
+        if args.migrate_preferred_only and pref:
+            sources = [s for s in sources if any(f in (s.get('name') or s.get('apkName') or '').lower() for f in pref)]
         sorted_sources = sorted(sources, key=score)
         # Helper: normalize site key from name/apkName
         def site_key(src: Dict[str, Any]) -> str:
@@ -1780,12 +2259,28 @@ def main(argv: Optional[List[str]] = None) -> int:
         skipped = 0
         failed = 0
         threshold = max(0, args.migrate_threshold_chapters)
+        filter_sub = (args.migrate_filter_title or "").strip().lower()
+        # Parse preferred languages once
+        pref_langs: Set[str] = set()
+        if args.preferred_langs:
+            pref_langs = {s.strip().lower().replace('_','-') for s in args.preferred_langs.split(',') if s.strip()}
         for idx, entry in enumerate(library, 1):
             mid = entry.get('id') or entry.get('mangaId') or entry.get('manga_id')
             try:
                 mid_int = int(mid)
             except Exception:
                 continue
+            # Apply category filters if provided
+            if include_cat_tokens or exclude_cat_tokens:
+                cats_for = membership.get(mid_int, set())
+                if include_cat_tokens and not (cats_for & include_cat_ids):
+                    if args.debug_library and not args.no_progress:
+                        print(f"[{idx}] SKIP by include-categories")
+                    continue
+                if exclude_cat_tokens and (cats_for & exclude_cat_ids):
+                    if args.debug_library and not args.no_progress:
+                        print(f"[{idx}] SKIP by exclude-categories")
+                    continue
             title = str(entry.get('title') or entry.get('name') or '').strip()
             ch_count = client_auth.get_manga_chapters_count(mid_int)
             if ch_count >= threshold:
@@ -1805,10 +2300,17 @@ def main(argv: Optional[List[str]] = None) -> int:
                 continue
             if not args.no_progress:
                 print(f"[{idx}] MIGRATE '{title}' (chapters={ch_count})")
+            # If filter requested, enforce title contains substring
+            if filter_sub and filter_sub not in (title or '').lower():
+                if args.debug_library and not args.no_progress:
+                    print(f"[{idx}]   filter-title skip (no match)")
+                continue
             added_any = False
             start_ts = time.time()
             per_site_counts: Dict[str, int] = {}
             cap_announced: Dict[str, bool] = {}
+            # If global best is requested, accumulate candidates across sites first
+            global_best: Optional[Tuple[int, int, Dict[str, Any]]] = None  # (score,count,cand)
             for src in sorted_sources:
                 nm = (src.get('name') or src.get('apkName') or '').lower()
                 try:
@@ -1837,7 +2339,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         if args.debug_library and not args.no_progress:
                             print(f"[{idx}]   search error on source id={sid}: {e}")
                         res = None
-                    items = (res or {}).get('mangaList') or (res or {}).get('mangaListData') or (res or {}).get('manga_list') or []
+                    items = SuwayomiClient.normalize_search_items(res)
                     if items:
                         got_items = items
                         break
@@ -1846,7 +2348,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                             res2 = client_auth.search_source(sid, qtitle, page=2)
                         except Exception:
                             res2 = None
-                        items2 = (res2 or {}).get('mangaList') or (res2 or {}).get('mangaListData') or (res2 or {}).get('manga_list') or []
+                        items2 = SuwayomiClient.normalize_search_items(res2)
                         if items2:
                             got_items = items2
                             break
@@ -1855,12 +2357,75 @@ def main(argv: Optional[List[str]] = None) -> int:
                         print(f"[{idx}]   no results")
                     per_site_counts[skey] = cnt + 1
                     continue
-                try:
-                    alt_id = int(got_items[0].get('id'))
-                except Exception:
+                # Score candidates
+                alt_id = None
+                if args.best_source:
+                    best_count = -1
+                    limit = max(1, int(args.best_source_candidates))
+                    for cand in got_items[:limit]:
+                        cid = SuwayomiClient.extract_manga_id(cand)
+                        if cid is None:
+                            continue
+                        ccount = 0
+                        try:
+                            if pref_langs:
+                                if args.best_source_canonical:
+                                    ccount = client_auth.get_manga_chapters_count_by_lang(cid, pref_langs, canonical=True)
+                                else:
+                                    ccount = client_auth.get_manga_chapters_count_by_lang(cid, pref_langs, canonical=False)
+                                if ccount == 0 and args.lang_fallback:
+                                    # fallback to non-filtered count
+                                    ccount = client_auth.get_manga_chapters_canonical_count(cid) if args.best_source_canonical else client_auth.get_manga_chapters_count(cid)
+                            else:
+                                ccount = client_auth.get_manga_chapters_canonical_count(cid) if args.best_source_canonical else client_auth.get_manga_chapters_count(cid)
+                        except Exception:
+                            ccount = 0
+                        if args.debug_library and not args.no_progress:
+                            ctitle = str(cand.get('title') or cand.get('name') or '')
+                            print(f"[{idx}]     cand id={cid} site='{nm}' score={ccount} title='{ctitle[:60]}'")
+                        if ccount >= max(0, int(args.min_chapters_per_alt)) and ccount > best_count:
+                            best_count = ccount
+                            alt_id = cid
+                            if not args.best_source_global:
+                                # non-global: choose per-site immediately
+                                pass
+                    if args.best_source_global and alt_id is not None:
+                        score_val = best_count
+                        if global_best is None or score_val > global_best[0]:
+                            global_best = (score_val, alt_id, src)
+                        per_site_counts[skey] = cnt + 1
+                        continue
+                else:
+                    alt_id = SuwayomiClient.extract_manga_id(got_items[0])
+                # Fallback: if no candidate met min, take first if allowed and min=0 (only when not global)
+                if not args.best_source_global and alt_id is None and int(args.min_chapters_per_alt) <= 0 and got_items:
+                    alt_id = SuwayomiClient.extract_manga_id(got_items[0])
+                if args.best_source_global:
+                    # In global mode we don't add yet; continue scanning other sources
+                    per_site_counts[skey] = cnt + 1
+                    continue
+                if alt_id is None:
                     if args.debug_library and not args.no_progress:
                         print(f"[{idx}]   unexpected search payload shape")
+                    per_site_counts[skey] = cnt + 1
                     continue
+                # If the chosen alt already exists and user wants to remove the original instead of duplicating
+                if not args.dry_run and args.migrate_remove_if_duplicate and alt_id and alt_id in lib_ids and alt_id != mid_int:
+                    try:
+                        alt_ch = client_auth.get_manga_chapters_count(alt_id)
+                    except Exception:
+                        alt_ch = None
+                    if (alt_ch or 0) > 0:
+                        try:
+                            rm_ok = client_auth.remove_from_library(mid_int)
+                        except Exception:
+                            rm_ok = False
+                        if not args.no_progress:
+                            print(f"[{idx}] DUPLICATE already in library with chapters; REMOVE original -> {'OK' if rm_ok else 'FAIL'}")
+                        if rm_ok:
+                            migrated += 1
+                            added_any = True
+                            break
                 if args.dry_run:
                     added_any = True
                     if not args.no_progress:
@@ -1885,6 +2450,49 @@ def main(argv: Optional[List[str]] = None) -> int:
                 if added_any:
                     migrated += 1
                     break
+            # If global-best was requested, add the single winner now
+            if not added_any and args.best_source_global and global_best is not None:
+                best_score, best_alt_id, src_best = global_best
+                # If the best alternative already exists and user wants to remove the original instead of duplicating
+                if not args.dry_run and args.migrate_remove_if_duplicate and best_alt_id and best_alt_id in lib_ids and best_alt_id != mid_int:
+                    try:
+                        best_ch = client_auth.get_manga_chapters_count(best_alt_id)
+                    except Exception:
+                        best_ch = None
+                    if (best_ch or 0) > 0:
+                        try:
+                            rm_ok = client_auth.remove_from_library(mid_int)
+                        except Exception:
+                            rm_ok = False
+                        if not args.no_progress:
+                            print(f"[{idx}] DUPLICATE already in library with chapters; REMOVE original -> {'OK' if rm_ok else 'FAIL'}")
+                        if rm_ok:
+                            migrated += 1
+                            added_any = True
+                if added_any:
+                    pass
+                elif args.dry_run:
+                    added_any = True
+                    if not args.no_progress:
+                        print(f"[{idx}] MIGRATE '{title}' via '{src_best.get('name')}' (global-best) -> OK (dry-run)")
+                else:
+                    try:
+                        added_any = client_auth.add_to_library(best_alt_id)
+                    except Exception as e:
+                        if args.debug_library and not args.no_progress:
+                            print(f"[{idx}]   add_to_library error for id={best_alt_id}: {e}")
+                        added_any = False
+                    if not args.no_progress:
+                        print(f"[{idx}] MIGRATE '{title}' via '{src_best.get('name')}' (global-best) -> {'OK' if added_any else 'FAIL'}")
+                if added_any and args.migrate_remove and not args.dry_run:
+                    try:
+                        rm_ok = client_auth.remove_from_library(mid_int)
+                        if not args.no_progress:
+                            print(f"[{idx}] REMOVE original -> {'OK' if rm_ok else 'FAIL'}")
+                    except Exception:
+                        pass
+                if added_any:
+                    migrated += 1
             if not added_any:
                 failed += 1
             # Optional light throttle between items if --throttle set
@@ -1916,6 +2524,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         'sources': [s.strip() for s in (args.rehoming_sources.split(',') if args.rehoming_sources else []) if s.strip()],
         'skip_if_ge': args.rehoming_skip_if_chapters_ge,
         'remove_md': args.rehoming_remove_mangadex,
+        'exclude_frags': [s.strip().lower() for s in (args.exclude_sources.split(',') if args.exclude_sources else []) if s.strip()],
+        'best_source': bool(args.best_source),
+        'best_candidates': int(args.best_source_candidates),
+        'min_chapters_per_alt': int(args.min_chapters_per_alt),
+        'canonical': bool(args.best_source_canonical),
     } if args.rehoming_enabled else None,
     )
 
