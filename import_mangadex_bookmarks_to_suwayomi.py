@@ -96,10 +96,11 @@ def read_any(path: Path) -> List[str]:
 # --- Suwayomi client ---
 
 class SuwayomiClient:
-    def __init__(self, base_url: str, auth_mode: str = "auto", username: Optional[str] = None, password: Optional[str] = None, token: Optional[str] = None, verify_tls: bool = True):
+    def __init__(self, base_url: str, auth_mode: str = "auto", username: Optional[str] = None, password: Optional[str] = None, token: Optional[str] = None, verify_tls: bool = True, request_timeout: float = 12.0):
         self.base_url = base_url.rstrip('/')
         self.sess = requests.Session()
         self.verify = verify_tls
+        self.timeout = request_timeout
         self.headers: Dict[str, str] = {}
         self.auth_mode = auth_mode
         self.username = username
@@ -131,11 +132,14 @@ class SuwayomiClient:
         url = f"{self.base_url}{path}"
         headers = dict(self.headers)
         headers.update(kwargs.pop("headers", {}) or {})
+        # Default timeout for all requests to avoid stalls
+        if 'timeout' not in kwargs:
+            kwargs['timeout'] = self.timeout
         resp = self.sess.request(method, url, headers=headers, verify=self.verify, **kwargs)
         # Fallback: if 401 with basic on auto, try SIMPLE login
         if resp.status_code == 401 and self.auth_mode == "auto" and self.username and self.password:
             # try simple login once
-            login = self.sess.post(f"{self.base_url}/login.html", data={"user": self.username, "pass": self.password}, allow_redirects=False, verify=self.verify)
+            login = self.sess.post(f"{self.base_url}/login.html", data={"user": self.username, "pass": self.password}, allow_redirects=False, verify=self.verify, timeout=self.timeout)
             if login.status_code in (200, 302, 303):
                 resp = self.sess.request(method, url, headers=headers, verify=self.verify, **kwargs)
         return resp
@@ -854,6 +858,16 @@ def import_ids(
                             pref = [s.strip().lower() for s in (rehome_conf.get('sources') or []) if s.strip()]
                             # Load all sources
                             all_sources = client.get_sources()
+                            # Exclude unwanted sources by name/apkName
+                            exclude_frags = [s.strip().lower() for s in (args.exclude_sources.split(',') if args.exclude_sources else []) if s.strip()]
+                            if exclude_frags:
+                                _tmp = []
+                                for _s in all_sources:
+                                    _nm = (_s.get('name') or _s.get('apkName') or '').lower()
+                                    if any(f in _nm for f in exclude_frags):
+                                        continue
+                                    _tmp.append(_s)
+                                all_sources = _tmp
                             # Sort sources by preference (those matching any fragment first)
                             def score(src: Dict[str, Any]) -> int:
                                 nm = (src.get('name') or src.get('apkName') or '').lower()
@@ -1339,8 +1353,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--migrate-library", action="store_true", help="Scan current Suwayomi library and add an alternative source for entries under a chapter threshold")
     p.add_argument("--migrate-threshold-chapters", type=int, default=1, help="Only migrate entries with fewer than this many chapters (default 1)")
     p.add_argument("--migrate-sources", help="Preferred alternative sources (comma-separated fragments). If omitted, uses --rehoming-sources")
+    p.add_argument("--exclude-sources", default="comick,hitomi", help="Comma-separated source name fragments to always exclude (default: 'comick,hitomi')")
     p.add_argument("--migrate-remove", action="store_true", help="Remove the original library entry after a successful migration")
     p.add_argument("--debug-library", action="store_true", help="Verbose diagnostics for library and chapter listing endpoints during migration")
+    p.add_argument("--request-timeout", type=float, default=12.0, help="Default HTTP request timeout in seconds (default 12)")
+    p.add_argument("--migrate-timeout", type=float, default=20.0, help="Max seconds to spend trying sources for a single migration item (default 20)")
+    p.add_argument("--migrate-max-sources-per-site", type=int, default=3, help="Limit attempts per site name (e.g. 'mangapark') to this many different source IDs (default 3)")
+    p.add_argument("--migrate-try-second-page", action="store_true", help="Try page 2 if page 1 had no results (slower)")
     # Custom lists support
     p.add_argument("--import-lists", action="store_true", help="Fetch MangaDex custom lists and map list names to categories")
     p.add_argument("--list-lists", action="store_true", help="List your MangaDex custom lists (id + name) and exit")
@@ -1648,6 +1667,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         password=args.password,
         token=args.token,
         verify_tls=not args.insecure,
+        request_timeout=args.request_timeout,
     )
 
     if args.list_categories:
@@ -1702,6 +1722,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             password=args.password,
             token=args.token,
             verify_tls=not args.insecure,
+            request_timeout=args.request_timeout,
         )
         client_auth._auth()
         # Attach debug flag
@@ -1717,6 +1738,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         pref = [s.strip().lower() for s in pref_str.split(',') if s.strip()]
         # Find all sources and sort by preference
         sources = client_auth.get_sources()
+        # Exclude unwanted sources by name/apkName
+        exclude_frags = [s.strip().lower() for s in (args.exclude_sources.split(',') if args.exclude_sources else []) if s.strip()]
+        if exclude_frags:
+            def not_excluded(src: Dict[str, Any]) -> bool:
+                nm = (src.get('name') or src.get('apkName') or '').lower()
+                return all(frag not in nm for frag in exclude_frags)
+            sources = [s for s in sources if not_excluded(s)]
         def score(src: Dict[str, Any]) -> int:
             nm = (src.get('name') or src.get('apkName') or '').lower()
             for i, frag in enumerate(pref):
@@ -1724,6 +1752,30 @@ def main(argv: Optional[List[str]] = None) -> int:
                     return i
             return 9999
         sorted_sources = sorted(sources, key=score)
+        # Helper: normalize site key from name/apkName
+        def site_key(src: Dict[str, Any]) -> str:
+            nm = (src.get('name') or src.get('apkName') or '').lower()
+            return re.sub(r"[^a-z]+", "", nm)[:32]
+        # Helper: generate conservative title variants
+        def title_variants(full: str) -> List[str]:
+            vars: List[str] = []
+            def add(s: str):
+                s = ' '.join(s.split())
+                if s and s not in vars:
+                    vars.append(s)
+            add(full)
+            # Strip after common separators
+            m = re.split(r"\s*[~:\-–—]\s*", full)
+            if m:
+                add(m[0])
+            # Remove bracketed segments
+            add(re.sub(r"[\(\[\{].*?[\)\]\}]", "", full))
+            # Remove punctuation
+            add(re.sub(r"[^0-9A-Za-z\s]", "", full))
+            # Truncate
+            if len(full) > 64:
+                add(full[:64])
+            return vars[:4]
         migrated = 0
         skipped = 0
         failed = 0
@@ -1754,31 +1806,75 @@ def main(argv: Optional[List[str]] = None) -> int:
             if not args.no_progress:
                 print(f"[{idx}] MIGRATE '{title}' (chapters={ch_count})")
             added_any = False
+            start_ts = time.time()
+            per_site_counts: Dict[str, int] = {}
+            cap_announced: Dict[str, bool] = {}
             for src in sorted_sources:
                 nm = (src.get('name') or src.get('apkName') or '').lower()
                 try:
                     sid = int(src.get('id'))
                 except Exception:
                     continue
-                try:
-                    res = client_auth.search_source(sid, title, page=1)
-                except Exception:
+                skey = site_key(src)
+                cnt = per_site_counts.get(skey, 0)
+                if args.migrate_max_sources_per_site and cnt >= max(1, int(args.migrate_max_sources_per_site)):
+                    if args.debug_library and not args.no_progress and not cap_announced.get(skey):
+                        print(f"[{idx}]   skip remaining '{nm}' sources (cap {args.migrate_max_sources_per_site})")
+                        cap_announced[skey] = True
                     continue
-                items = res.get('mangaList') or res.get('mangaListData') or res.get('manga_list') or []
-                if not items:
+                if args.migrate_timeout and (time.time() - start_ts) > args.migrate_timeout:
+                    if not args.no_progress:
+                        print(f"[{idx}] MIGRATE timeout after {args.migrate_timeout:.0f}s; giving up on this title")
+                    break
+                got_items: List[Dict[str, Any]] = []
+                # Try small set of title variants for this source
+                for qtitle in title_variants(title):
+                    try:
+                        if args.debug_library and not args.no_progress:
+                            print(f"[{idx}]   search '{qtitle}' in source id={sid} ({nm})")
+                        res = client_auth.search_source(sid, qtitle, page=1)
+                    except Exception as e:
+                        if args.debug_library and not args.no_progress:
+                            print(f"[{idx}]   search error on source id={sid}: {e}")
+                        res = None
+                    items = (res or {}).get('mangaList') or (res or {}).get('mangaListData') or (res or {}).get('manga_list') or []
+                    if items:
+                        got_items = items
+                        break
+                    if args.migrate_try_second_page:
+                        try:
+                            res2 = client_auth.search_source(sid, qtitle, page=2)
+                        except Exception:
+                            res2 = None
+                        items2 = (res2 or {}).get('mangaList') or (res2 or {}).get('mangaListData') or (res2 or {}).get('manga_list') or []
+                        if items2:
+                            got_items = items2
+                            break
+                if not got_items:
+                    if args.debug_library and not args.no_progress:
+                        print(f"[{idx}]   no results")
+                    per_site_counts[skey] = cnt + 1
                     continue
                 try:
-                    alt_id = int(items[0].get('id'))
+                    alt_id = int(got_items[0].get('id'))
                 except Exception:
+                    if args.debug_library and not args.no_progress:
+                        print(f"[{idx}]   unexpected search payload shape")
                     continue
                 if args.dry_run:
                     added_any = True
                     if not args.no_progress:
                         print(f"[{idx}] MIGRATE '{title}' via '{src.get('name')}' -> OK (dry-run)")
                 else:
-                    added_any = client_auth.add_to_library(alt_id)
+                    try:
+                        added_any = client_auth.add_to_library(alt_id)
+                    except Exception as e:
+                        if args.debug_library and not args.no_progress:
+                            print(f"[{idx}]   add_to_library error for id={alt_id}: {e}")
+                        added_any = False
                     if not args.no_progress:
                         print(f"[{idx}] MIGRATE '{title}' via '{src.get('name')}' -> {'OK' if added_any else 'FAIL'}")
+                per_site_counts[skey] = cnt + 1
                 if added_any and args.migrate_remove and not args.dry_run:
                     try:
                         rm_ok = client_auth.remove_from_library(mid_int)
@@ -1791,6 +1887,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                     break
             if not added_any:
                 failed += 1
+            # Optional light throttle between items if --throttle set
+            if args.throttle:
+                time.sleep(max(0.0, float(args.throttle)))
         print(f"Migrate summary: migrated={migrated} skipped={skipped} failed={failed}")
         return 0 if failed == 0 else 6
 

@@ -82,6 +82,7 @@ python import_mangadex_bookmarks_to_suwayomi.py `
   --migrate-library `
   --migrate-threshold-chapters 1 `
   --migrate-sources "weeb central,mangapark" `
+  --exclude-sources "comick,hitomi" `
   --dry-run
 ```
 
@@ -93,6 +94,7 @@ python import_mangadex_bookmarks_to_suwayomi.py `
   --migrate-library `
   --migrate-threshold-chapters 1 `
   --migrate-sources "weeb central,mangapark" `
+  --exclude-sources "comick,hitomi" `
   --migrate-remove
 ```
 
@@ -100,6 +102,7 @@ Tips:
 
 - Use `--debug-library` to see which API/GraphQL paths are used
 - The tool deduplicates across categories and uses best‑effort chapter counting
+- Default excluded sources: `--exclude-sources "comick,hitomi"` (you can add more fragments)
 
 ---
 

@@ -86,6 +86,7 @@ python import_mangadex_bookmarks_to_suwayomi.py `
    --migrate-library `
    --migrate-threshold-chapters 1 `
    --migrate-sources "weeb central,mangapark" `
+   --exclude-sources "comick,hitomi" `
    --dry-run
 ```
 
@@ -105,6 +106,7 @@ Notes:
 - The tool discovers your library through GraphQL (categories first) and deduplicates across categories.
 - Chapter count is computed from available endpoints; if chapter endpoints need auth on your server, the tool will fall back to GraphQL and best-effort counting.
 - You can add `--debug-library` to print which endpoints and GraphQL fields were used.
+- Default excluded sources: `--exclude-sources "comick,hitomi"`. Adjust if you want to exclude more.
 
 ---
 
