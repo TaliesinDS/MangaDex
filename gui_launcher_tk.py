@@ -1058,6 +1058,8 @@ def main():
     sep2 = ttk.LabelFrame(db, text='Execution')
     sep2.grid(row=r, column=0, columnspan=3, sticky='nsew', pady=(8,4))
 
+
+
     rr = 0
     cb_no_fallback = ttk.Checkbutton(sep2, text='No title fallback', variable=vals['no_title_fallback']); cb_no_fallback.grid(row=rr, column=0, sticky='w')
     attach_tip(cb_no_fallback, 'Disable MangaDex title lookup fallback when direct UUID search fails.')
@@ -1106,13 +1108,59 @@ def main():
     bt_open_log = ttk.Button(sep3, text='Open Log File', command=_open_log); bt_open_log.grid(row=rr, column=1, sticky='w'); rr+=1
     attach_tip(bt_open_log, 'Open the current log file path if it exists.')
 
-    # Enforce tab order: Migrate, Prune, MangaDex Import, Suwayomi Database, Settings
+    # About tab
+    about = ttk.Frame(nb)
+    nb.add(about, text='About')
+    ar = 0
+    ab_hdr = ttk.Label(about, text='Suwayomi Database Tool', font=('Segoe UI', 12, 'bold'))
+    ab_hdr.grid(row=ar, column=0, columnspan=3, sticky='w', padx=8, pady=(8, 4)); ar+=1
+    ab_desc = ttk.Label(about, text='A helper GUI to import from MangaDex, migrate library entries between sources, and prune duplicates in Suwayomi.', wraplength=780, justify='left')
+    ab_desc.grid(row=ar, column=0, columnspan=3, sticky='w', padx=8); ar+=1
+    # Environment
+    try:
+        import platform
+        pyver = sys.version.split()[0]
+        env_txt = f"Python: {pyver}  |  OS: {platform.system()} {platform.release()}  |  Executable: {sys.executable}"
+    except Exception:
+        env_txt = f"Python: {sys.version.split()[0]}"
+    ab_env = ttk.Label(about, text=env_txt, foreground='#444')
+    ab_env.grid(row=ar, column=0, columnspan=3, sticky='w', padx=8, pady=(6, 10)); ar+=1
+    # Links
+    def _open_readme():
+        p = Path(__file__).parent / 'README.md'
+        if p.exists():
+            os.startfile(str(p)) if os.name == 'nt' else webbrowser.open(p.as_uri())
+        else:
+            messagebox.showinfo('Not found', 'README.md not found next to this script.')
+    def _open_manual():
+        show_manual_popup()
+    def _open_folder():
+        folder = str(Path(__file__).parent)
+        try:
+            os.startfile(folder)
+        except Exception:
+            webbrowser.open(Path(folder).as_uri())
+    def _copy_env():
+        try:
+            about.clipboard_clear()
+            about.clipboard_append(env_txt)
+            messagebox.showinfo('Copied', 'Environment info copied to clipboard.')
+        except Exception:
+            pass
+    ttk.Button(about, text='Open README', command=_open_readme).grid(row=ar, column=0, sticky='w', padx=8)
+    ttk.Button(about, text='Open Manual', command=_open_manual).grid(row=ar, column=1, sticky='w')
+    ttk.Button(about, text='Open Project Folder', command=_open_folder).grid(row=ar, column=2, sticky='w')
+    ar+=1
+    ttk.Button(about, text='Copy Environment Info', command=_copy_env).grid(row=ar, column=0, sticky='w', padx=8, pady=(6, 12))
+
+    # Enforce tab order: Migrate, Prune, MangaDex Import, Suwayomi Database, Settings, About
     try:
         nb.insert(0, mig)
         nb.insert(1, pr)
         nb.insert(2, fw)
         nb.insert(3, db)
         nb.insert(4, ms)
+        nb.insert(5, about)
     except Exception:
         pass
     nb.pack(fill='both', expand=True, padx=8, pady=(8, 4))
