@@ -289,7 +289,6 @@ Notes:
 - The GUI is free and open-source (Tkinter, part of Python stdlib).
 - Press the “?” button in the top-right to open this manual.
 - Presets are included for common tasks (Prefer English Migration, Cleanup Non-English, Keep Both).
- 
 
 Apply changes (remove `--dry-run`), and optionally delete the original entry when an alternative is added:
 

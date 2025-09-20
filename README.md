@@ -1,54 +1,86 @@
-# MangaDex → Suwayomi Importer
+# Suwayomi Database Tool (with GUI)
 
-Import your MangaDex follows, reading statuses, and read chapters into a Suwayomi (Tachidesk) server. Optionally migrate existing Suwayomi entries to alternative sources when the original source has 0 chapters (rehoming).
+A desktop helper for Suwayomi that brings together:
 
-This project is a standalone fork focused solely on MangaDex → Suwayomi. For a step‑by‑step, beginner‑friendly guide, see USER_MANUAL.md.
+- MangaDex import (follows, statuses, custom lists, read chapters)
+- Library migration between sources (rehoming, best-source selection)
+- Library pruning (duplicates, non-preferred languages)
+- Suwayomi connection utilities (auth modes, categories, throttling)
+
+It includes a Tkinter-based GUI with live command preview and presets, plus a direct command-line interface for automation.
 
 ---
 
 ## Features
 
-- Import all followed manga from MangaDex into Suwayomi
-- Map MangaDex reading statuses (Reading, Completed, Dropped, On Hold, Plan to Read) to Suwayomi categories
-- Sync read chapter markers to match MangaDex
-- Import from a local list file as an alternative to live follows
-- Migrate existing Suwayomi library entries to alternative sources (e.g., Weeb Central, MangaPark) when the current source has few/zero chapters
-- Prefer a specific site order and pick the best candidate by chapter count (canonical-aware)
-- Remove zero-chapter duplicates automatically when a full/partial duplicate already exists (`--migrate-remove-if-duplicate`)
-- Filter migration to a single title substring for quick checks (`--migrate-filter-title`)
-- Diagnostics and dry‑run mode to preview actions safely
+- GUI with tabs for Migrate, Prune, MangaDex Import, Suwayomi Database, Settings, and About
+- Command Preview: see the exact command that will run (including log piping)
+- General controls on a unified bottom bar: Dry run, Save log, Log path, Run, Reset, Exit
+- Per‑tab description and Help button (opens in-app manual viewer)
+- Tooltips on nearly every option explaining what to enter and what it does
+- Presets for common workflows (e.g., Prefer English Migration)
+- Works with packaged EXE or Python script directly
 
 ---
 
-## Prerequisites
+## Install / Run
 
-- Windows (or any OS with Python 3.11+)
-- Python 3.11 or newer
-- A running Suwayomi server (for example <http://127.0.0.1:4567>)
-- MangaDex account (username/password) if importing follows, statuses, or read markers
-- Suwayomi categories created ahead of time if you want status mapping
+- Requirements: Python 3.11+ (or use provided EXE if available), a running Suwayomi server (e.g. <http://127.0.0.1:4567>)
+- Windows: double‑click the GUI script, or run from PowerShell:
+  
+  ```powershell
+  # In repo root
+  .\.venv\Scripts\python.exe .\gui_launcher_tk.py
+  ```
 
-Auth notes:
-
-- Many Suwayomi builds expose GraphQL openly, so you may not need a UI token. If your server requires auth, pass `--username/--password` or `--token`.
-
----
-
-## Quick Start (Beginner)
-
-1) Double‑click `run_importer.bat`
-2) Enter base URL (e.g. `http://127.0.0.1:4567`)
-3) Choose to fetch follows, enter MangaDex credentials
-4) Choose status mapping and/or chapter sync (optional)
-5) Run a dry‑run first; then run again without dry‑run to apply
-
-Full instructions live in USER_MANUAL.md.
+- Or run the CLI directly:
+  
+  ```powershell
+  python import_mangadex_bookmarks_to_suwayomi.py --help
+  ```
 
 ---
 
-## Usage (Direct Python)
+## Tabs Overview
 
-Import follows + statuses + chapters (dry run):
+- Migrate
+  - Migrate titles between sources within Suwayomi, pick best alternatives by chapter coverage, optionally keep both
+  - Includes rehoming for zero‑chapter entries
+- Prune
+  - Remove zero/low‑chapter duplicates and entries without preferred‑language chapters
+- MangaDex Import
+  - Login, fetch follows, import statuses and read chapters, map statuses to categories, import custom lists
+- Suwayomi Database
+  - Connect to Suwayomi (auth modes: auto/basic/simple/bearer), list categories, open UI, set timeouts/throttle
+- Settings
+  - Debug output and presets
+- About
+  - App summary, environment info, quick links (README, Manual, Project Folder)
+
+Each tab starts with a short description and a Help button that opens the manual to the relevant section.
+
+---
+
+## Command Preview and Logging
+
+- Command Preview updates live as you change fields
+- Bottom bar controls apply to all tabs:
+  - Dry run: simulate without changing your library
+  - Save log to file: tee console output to a file (pick a path)
+  - Run Script: executes the previewed command
+  - Reset: restores defaults
+
+---
+
+## CLI Quick Examples
+
+List categories
+
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py --base-url http://127.0.0.1:4567 --list-categories
+```
+
+Import follows + statuses + read chapters (dry run)
 
 ```powershell
 python import_mangadex_bookmarks_to_suwayomi.py `
@@ -63,94 +95,44 @@ python import_mangadex_bookmarks_to_suwayomi.py `
   --dry-run
 ```
 
-Apply changes: remove `--dry-run`.
-
-List categories:
-
-```powershell
-python import_mangadex_bookmarks_to_suwayomi.py `
-  --base-url http://127.0.0.1:4567 `
-  --list-categories
-```
-
----
-
-## Migrate Existing Library (Rehome)
-
-Add an alternative source for entries with few/zero chapters (dry run):
+Migrate existing library (rehoming preferred sources)
 
 ```powershell
 python import_mangadex_bookmarks_to_suwayomi.py `
   --base-url http://127.0.0.1:4567 `
   --migrate-library `
   --migrate-threshold-chapters 1 `
-  --migrate-sources "weeb central,mangapark" `
-  --exclude-sources "comick,hitomi" `
-  --dry-run
-```
-
-Apply changes and remove the original after success:
-
-```powershell
-python import_mangadex_bookmarks_to_suwayomi.py `
-  --base-url http://127.0.0.1:4567 `
-  --migrate-library `
-  --migrate-threshold-chapters 1 `
-  --migrate-sources "weeb central,mangapark" `
-  --exclude-sources "comick,hitomi" `
-  --migrate-remove
-```
-
-Tips:
-
-- Use `--debug-library` to see which API/GraphQL paths are used
-- Use `--best-source` to score by chapter count (add `--best-source-canonical` to treat split/alt releases as one)
-- Use `--best-source-global` to compare across all preferred sites; without it, the first site to meet your minimum wins
-- Set `--best-source-candidates 3` to limit per-site scoring; raise if the correct series is often not first
-- Set `--min-chapters-per-alt 5` (or similar) to avoid selecting low-content mirrors
-- Limit exploration per site with `--migrate-max-sources-per-site 3` and use `--migrate-try-second-page` only when needed
-- Use `--migrate-filter-title "substring"` to focus on a single problematic series
-- Avoid clutter by adding `--migrate-remove-if-duplicate` so the original zero‑chapter entry is removed when the chosen alternative already exists in your library with chapters
-- The tool deduplicates across categories and uses best‑effort chapter counting (falls back to GraphQL if REST is unavailable)
-
-Example: Prefer Bato, fallback to Mangabuddy (fast per‑site mode)
-
-```powershell
-python import_mangadex_bookmarks_to_suwayomi.py `
-  --base-url http://127.0.0.1:4567 `
-  --migrate-library `
   --migrate-sources "bato.to,mangabuddy,weeb central,mangapark" `
-  --migrate-preferred-only `
+  --exclude-sources "comick,hitomi" `
   --best-source `
   --best-source-canonical `
   --best-source-candidates 4 `
   --min-chapters-per-alt 5 `
-  --exclude-sources "comick,hitomi" `
   --migrate-max-sources-per-site 3 `
   --migrate-timeout 25 `
   --migrate-remove-if-duplicate
 ```
 
-Diagnostics during migration
+---
 
-- Add `--debug-library` to print per-site searches and candidate scores like:
-  - `cand id=12345 site='bato.to' score=107 title='...'`
-  This helps you see why a site won and whether a source returned no results.
-- Default excluded sources: `--exclude-sources "comick,hitomi"` (you can add more fragments)
+## Web UI Userscripts (Optional)
+
+See `userscripts/README.md` for a Tampermonkey/Violentmonkey script that adds a “Sort: Recently Published” button to the Suwayomi web UI, so you can order titles by the latest published chapter date rather than database added date. Adjust selectors as needed for your UI version.
 
 ---
 
 ## Troubleshooting
 
-- Use `--dry-run` to preview actions
-- `--debug-follows` shows MangaDex follow pagination
-- `--status-map-debug` explains status mapping decisions
-- `--debug-library` prints Suwayomi library discovery and chapter count paths
+- Use Dry run + Command Preview to validate before running
+- Turn on Debug output in Settings for verbose logs
+- If auth fails: try different auth modes (auto/basic/simple/bearer) and tokens
+- If migration returns few results: raise best‑source candidates and timeout, and consider Preferred only off
+- Status mapping issues: enable Map debug and Print status summary
 
-If you need help, see USER_MANUAL.md → “Troubleshooting” and “Getting Help”.
+For details, open the in‑app manual (Help button on each tab).
 
 ---
 
 ## License
 
-This project is provided as‑is without warranty. Respect site and content policies, and support authors/artists.
+MIT. Respect site policies and support authors/artists.

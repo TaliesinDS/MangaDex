@@ -1,0 +1,1497 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run matcher dry-run after sakura disambiguation",
+			"type": "shell",
+			"command": "$env:STLMGR_DB_URL=\"sqlite:///./data/stl_manager_v1.db\"; .\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\match_franchise_characters.py --batch 500 --out .\\reports\\match_franchise_dryrun_after_sakura_disambig.json",
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run basing integrity tests",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"pytest -q"
+			],
+			"problemMatcher": [
+				"$python"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run tests after DG basing fix",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			],
+			"problemMatcher": [
+				"$python"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run integrity tests after base_profile additions",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			],
+			"problemMatcher": [
+				"$python"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run integrity tests after latest HH additions",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run integrity tests (basing HH)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			]
+		},
+		{
+			"label": "Run integrity tests after Primarchs batch",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			]
+		},
+		{
+			"label": "Run basing integrity tests (Heresy check)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			]
+		},
+		{
+			"label": "Run basing integrity tests (Heresy check)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			]
+		},
+		{
+			"label": "Run integrity tests after latest HH additions",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			]
+		},
+		{
+			"label": "Run integrity tests after base_profile additions",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			]
+		},
+		{
+			"label": "Run integrity tests (basing HH)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			]
+		},
+		{
+			"label": "Run integrity tests (AoS YAML)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			]
+		},
+		{
+			"label": "Run integrity tests after Darkoath additions",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			]
+		},
+		{
+			"label": "Run integrity tests after Darkoath Marauders",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			]
+		},
+		{
+			"label": "Run integrity tests after alias tweak",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			]
+		},
+		{
+			"label": "Run integrity tests after edge-case cleanup",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			]
+		},
+		{
+			"label": "Run integrity tests (Order sweep)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			]
+		},
+		{
+			"label": "Run integrity tests (Order sweep 2)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			]
+		},
+		{
+			"label": "Run integrity tests (Order sweep 3)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			]
+		},
+		{
+			"label": "Run integrity tests after quote normalization",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe -m pytest -q tests/test_codex_basing_integrity.py"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Load W40K codex (dry-run)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$env:STLMGR_DB_URL=\"sqlite:///./data/stl_manager_v1.db\"; .\\.venv\\Scripts\\python.exe .\\scripts\\20_loaders\\load_codex_from_yaml.py --file .\\vocab\\codex_units_w40k.yaml"
+			]
+		},
+		{
+			"label": "Load W40K codex (dry-run)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\20_loaders\\load_codex_from_yaml.py --file .\\vocab\\codex_units_w40k.yaml --db-url sqlite:///./data/stl_manager_v1.db"
+			]
+		},
+		{
+			"label": "Load W40K codex (dry-run)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\20_loaders\\load_codex_from_yaml.py --file .\\vocab\\codex_units_w40k.yaml --db-url sqlite:///./data/stl_manager_v1.db"
+			]
+		},
+		{
+			"label": "Load W40K codex (dry-run)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\20_loaders\\load_codex_from_yaml.py --file .\\vocab\\codex_units_w40k.yaml --db-url sqlite:///./data/stl_manager_v1.db"
+			]
+		},
+		{
+			"label": "Run loader (dry-run) for wargear and bodies",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\20_loaders\\load_codex_from_yaml.py --file .\\vocab\\wargear_w40k.yaml --db-url sqlite:///./data/stl_manager_v1.db; .\\.venv\\Scripts\\python.exe .\\scripts\\20_loaders\\load_codex_from_yaml.py --file .\\vocab\\bodies_w40k.yaml --db-url sqlite:///./data/stl_manager_v1.db"
+			]
+		},
+		{
+			"label": "Run loader (dry-run) for parts only",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\20_loaders\\load_codex_from_yaml.py --file .\\vocab\\wargear_w40k.yaml --db-url sqlite:///./data/stl_manager_v1.db"
+			]
+		},
+		{
+			"label": "Run loader (dry-run) for wargear only",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\20_loaders\\load_codex_from_yaml.py --file .\\vocab\\wargear_w40k.yaml --db-url sqlite:///./data/stl_manager_v1.db"
+			]
+		},
+		{
+			"label": "Run loader (dry-run) for wargear only (retry)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\20_loaders\\load_codex_from_yaml.py --file .\\vocab\\wargear_w40k.yaml --db-url sqlite:///./data/stl_manager_v1.db"
+			]
+		},
+		{
+			"label": "Run all tests (venv)",
+			"type": "shell",
+			"command": "c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"-q"
+			],
+			"problemMatcher": [
+				"$python"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run matcher dry-run (DB-aware kit collapse)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\match_variants_to_units.py --limit 0 --include-kit-children --out reports/match_units_with_children.json --append-timestamp"
+			]
+		},
+		{
+			"label": "Run matcher dry-run (DB-aware kit collapse) - retry",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\match_variants_to_units.py --limit 0 --include-kit-children --out reports/match_units_with_children.json --append-timestamp"
+			]
+		},
+		{
+			"label": "Run matcher (with-children) using v1 DB",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$env:STLMGR_DB_URL=\"sqlite:///./data/stl_manager_v1.db\"; .\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\match_variants_to_units.py --include-kit-children --out reports/match_units_with_children.json --append-timestamp"
+			]
+		},
+		{
+			"label": "Run tests (venv) after script migration batch",
+			"type": "shell",
+			"command": "c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"-q"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run tests (venv) after db_check fix",
+			"type": "shell",
+			"command": "c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"-q"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run all tests (venv) - on demand",
+			"type": "shell",
+			"command": "c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"-q"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run all tests (venv) - migration checkpoint",
+			"type": "shell",
+			"command": "c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"-q"
+			],
+			"problemMatcher": [
+				"$python"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run all tests (venv) - user repro",
+			"type": "shell",
+			"command": "c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"-q"
+			],
+			"problemMatcher": [
+				"$python"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run tests (venv) - post quick_scan tweak",
+			"type": "shell",
+			"command": "c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"-q"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$python"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run tests (venv) - docs updates sanity",
+			"type": "shell",
+			"command": "c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"-q"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$python"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run all tests (venv) - migration shim batch",
+			"type": "shell",
+			"command": "c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"-q"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Load designers tokenmap JSON into DB (v1)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$env:STLMGR_DB_URL=\"sqlite:///./data/stl_manager_v1.db\"; .\\.venv\\Scripts\\python.exe .\\scripts\\20_loaders\\load_designers.py .\\vocab\\designers_tokenmap.json --commit"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run designers loader with reconcile and variant updates",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$env:STLMGR_DB_URL=\"sqlite:///./data/stl_manager_v1.db\"; .\\.venv\\Scripts\\python.exe .\\scripts\\20_loaders\\load_designers.py .\\vocab\\designers_tokenmap.json --commit --reconcile-renamed --update-variants"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Dedup franchise proposals",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\maintenance\\dedup_franchise_proposals.py --franchises .\\vocab\\franchises --proposals .\\docs\\franchise_character_proposals.md"
+			]
+		},
+		{
+			"label": "Dedup franchise proposals",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\maintenance\\dedup_franchise_proposals.py --franchises .\\vocab\\franchises --proposals .\\docs\\franchise_character_proposals.md"
+			]
+		},
+		{
+			"label": "Dedup franchise proposals",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\maintenance\\dedup_franchise_proposals.py --franchises .\\vocab\\franchises --proposals .\\docs\\franchise_character_proposals.md"
+			]
+		},
+		{
+			"label": "Dedup franchise proposals",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\maintenance\\dedup_franchise_proposals.py --franchises .\\vocab\\franchises --proposals .\\docs\\franchise_character_proposals.md"
+			]
+		},
+		{
+			"label": "Dedup franchise proposals",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\maintenance\\dedup_franchise_proposals.py --franchises .\\vocab\\franchises --proposals .\\docs\\franchise_character_proposals.md"
+			]
+		},
+		{
+			"label": "Dedup franchise proposals",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\maintenance\\dedup_franchise_proposals.py --franchises .\\vocab\\franchises --proposals .\\docs\\franchise_character_proposals.md"
+			]
+		},
+		{
+			"label": "Dedup franchise proposals (rerun)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\maintenance\\dedup_franchise_proposals.py --franchises .\\vocab\\franchises --proposals .\\docs\\franchise_character_proposals.md"
+			]
+		},
+		{
+			"label": "Dedup franchise proposals (post-append)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\maintenance\\dedup_franchise_proposals.py --franchises .\\vocab\\franchises --proposals .\\docs\\franchise_character_proposals.md"
+			]
+		},
+		{
+			"label": "Dedup franchise proposals (finalize pass)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\maintenance\\dedup_franchise_proposals.py --franchises .\\vocab\\franchises --proposals .\\docs\\franchise_character_proposals.md"
+			]
+		},
+		{
+			"label": "Dedup franchise proposals (post-batch 2)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\maintenance\\dedup_franchise_proposals.py --franchises .\\vocab\\franchises --proposals .\\docs\\franchise_character_proposals.md"
+			]
+		},
+		{
+			"label": "Dedup franchise proposals (enhanced)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\maintenance\\dedup_franchise_proposals.py --franchises .\\vocab\\franchises --proposals .\\docs\\franchise_character_proposals.md"
+			]
+		},
+		{
+			"label": "Dedup franchise proposals (intro cleanup)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\maintenance\\dedup_franchise_proposals.py --franchises .\\vocab\\franchises --proposals .\\docs\\franchise_character_proposals.md"
+			]
+		},
+		{
+			"label": "Apply franchise proposals to manifests",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\maintenance\\apply_franchise_proposals.py"
+			]
+		},
+		{
+			"label": "Validate franchise JSON manifests",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\maintenance\\validate_franchises_json.py"
+			]
+		},
+		{
+			"label": "Load franchises into DB (commit)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$env:STLMGR_DB_URL=\"sqlite:///./data/stl_manager_v1.db\"; .\\.venv\\Scripts\\python.exe .\\scripts\\20_loaders\\load_franchises.py .\\vocab\\franchises --commit --dedupe"
+			]
+		},
+		{
+			"label": "Sync franchise tokens to DB (apply)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\20_loaders\\sync_franchise_tokens_to_vocab.py --db-url sqlite:///./data/stl_manager_v1.db --apply"
+			]
+		},
+		{
+			"label": "Run tests (venv) after scale restore",
+			"type": "shell",
+			"command": "c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"-q"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run matcher (with-children) using v1 DB (dry-run)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\match_variants_to_units.py --include-kit-children --out reports/match_units_with_children.json --append-timestamp"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run matcher with v1 DB via --db-url (dry-run)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\match_variants_to_units.py --db-url sqlite:///./data/stl_manager_v1.db --include-kit-children --out reports/match_units_with_children.json --append-timestamp"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Fetch MMF collections (username prompt)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\10_integrations\\fetch_mmf_collections.py --username heroesinfinite"
+			],
+			"problemMatcher": [
+				"$python"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Fetch MMF collections (prompt)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"${workspaceFolder}/.venv/Scripts/python.exe ${workspaceFolder}/scripts/10_integrations/fetch_mmf_collections.py --username ${input:mmf_username} ${input:mmf_use_api_key} --max-pages 10 --per-page 50"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "Run tests (venv) - scale parsing update",
+			"type": "shell",
+			"command": "c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"-q"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Run alembic upgrade head (venv) - multilingual fields",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe -m alembic upgrade head"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run alembic upgrade head (venv) - multilingual fields retry",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe -m alembic upgrade head"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run backfill english_tokens dry-run (venv)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 5 --out reports/backfill_dryrun_smoke.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Stamp alembic to head-safe baseline and upgrade",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe -m alembic stamp head; .\\.venv\\Scripts\\python.exe -m alembic upgrade head"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run backfill english_tokens dry-run (venv) retry",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 5 --limit 5 --out reports/backfill_dryrun_retry.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Stamp to initial then upgrade head",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe -m alembic stamp 0001_canonical_initial; .\\.venv\\Scripts\\python.exe -m alembic upgrade head"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Upgrade alembic to head after index fix",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe -m alembic upgrade head"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run backfill english_tokens dry-run (after guards)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 5 --limit 5 --out reports/backfill_dryrun_guarded.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run all tests after migration/backfill fixes",
+			"type": "shell",
+			"command": "c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"-q"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Stamp to 0001 then upgrade head (final)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe -m alembic stamp 0001_canonical_initial; .\\.venv\\Scripts\\python.exe -m alembic upgrade head"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill english_tokens full dry-run (timestamped)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$ts=(Get-Date -Format \"yyyyMMdd_HHmmss\"); .\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 500 --limit 0 --out (\"reports/backfill_english_tokens_dryrun_\" + $ts + \".json\")"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run variant coverage audit (venv)",
+			"type": "shell",
+			"command": "c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe",
+			"args": [
+				"scripts/diagnostics/audit_variant_coverage.py",
+				"--db",
+				"data/stl_manager_v1.db",
+				"--out",
+				"reports/variant_coverage.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run all tests (venv) - on demand",
+			"type": "shell",
+			"command": "c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"-q"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run cleanup dry-run for __MACOSX",
+			"type": "shell",
+			"command": "c:/Users/akortekaas/Documents/GitHub/STL-manager/.venv/Scripts/python.exe",
+			"args": [
+				"scripts/50_cleanup_repair/remove_macosx_duplicates.py",
+				"--out",
+				"reports/remove_macosx_dryrun.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en dry-run (venv)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 50 --materialize-ui --out reports/backfill_ui_display_dryrun.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (forced)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 100 --materialize-ui --force --out reports/backfill_ui_display_preview.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (forced v2)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 100 --materialize-ui --force --out reports/backfill_ui_display_preview.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (forced v3)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 100 --materialize-ui --force --out reports/backfill_ui_display_preview.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (forced v4)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 100 --materialize-ui --force --out reports/backfill_ui_display_preview.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (forced v5)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 100 --materialize-ui --force --out reports/backfill_ui_display_preview.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (forced v6)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 100 --materialize-ui --force --out reports/backfill_ui_display_preview.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (forced v7)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 100 --materialize-ui --force --out reports/backfill_ui_display_preview.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 100 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only recheck)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 200 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only recheck 177)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 220 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only final 177)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 220 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only recheck 180)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 230 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only final 180)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 235 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only recheck 205)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 50 --limit 260 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only bodies prefix)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 100 --limit 300 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only 236 prefix)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 100 --limit 310 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only recheck 244)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 100 --limit 325 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only final 244)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 100 --limit 330 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only verify 244 name)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 100 --limit 335 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only recheck 243,245)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 100 --limit 350 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only recheck 243,245 v2)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 100 --limit 355 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only verify 243/245 final)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 100 --limit 360 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only recheck 243/245 tie-break)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 100 --limit 365 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only final 243/245)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 100 --limit 370 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only final verify 245 CG)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 100 --limit 380 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only verify 245 fallback)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 100 --limit 385 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only verify 245 path fallback)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 100 --limit 390 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only verify 245 rebuild vs unit)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 100 --limit 395 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only verify 245 number-pref fallback)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 200 --limit 400 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only verify 247-249 lychee)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 150 --limit 410 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (tabletop-only verify 253-256)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 200 --limit 420 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (verify 253-256 after noise strip)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 220 --limit 430 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (verify STL_Name patterns for 253-256)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 240 --limit 440 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (re-run after codex_unit_name load fix)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 240 --limit 440 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (final verify 253-256)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 240 --limit 440 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill ui_display_en preview (rebuild after choose_thing improvements)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 240 --limit 440 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Backfill tabletop preview (short run around 253)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 240,241,242,243,244,245,246,247,248,249,250,251,252,253,254,255,256,257 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_ids_240_257.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Apply tabletop UI labels for 253–256 (timestamped)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$ts=(Get-Date -Format \"yyyyMMdd_HHmmss\"); .\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 253,254,255,256 --materialize-ui --apply --force --tabletop-only --out (\"reports/backfill_tabletop_apply_ids_253_256_\" + $ts + \".json\")"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Preview around 263–265 after bucket suffix improvement",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 263,264,265 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_ids_263_265.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Preview regressions: 70,150,173",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 70,150,173 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_ids_70_150_173.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Preview regressions (2): 70,150,173",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 70,150,173 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_ids_70_150_173.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Preview 183–184 bat dragon naming",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 183,184 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_ids_183_184.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Preview 183–184 and 150 after hyphen prefix tweak",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 183,184,150 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_ids_183_184_150.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Full tabletop UI display sweep (timestamped)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$ts=(Get-Date -Format 'yyyyMMdd_HHmmss'); .\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 500 --limit 0 --materialize-ui --force --tabletop-only --out ('reports/backfill_ui_display_tabletop_full_' + $ts + '.json')"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run full tabletop UI sweep (timestamped)",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$ts=(Get-Date -Format \"yyyyMMdd_HHmmss\"); $out=(\"reports/backfill_ui_display_tabletop_full_\" + $ts + \".json\"); .\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --batch 500 --limit 0 --materialize-ui --force --tabletop-only --out $out"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Preview 185–186 after multi-word guard",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 185,186 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_ids_185_186.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Re-preview 185–186 after fallback guard",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 185,186 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_ids_185_186.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Preview 185–186 after guard move",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 185,186 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_ids_185_186.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Preview 193 after enforcing collection prefix",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 193 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_id_193.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Preview 203 & 205 after punctuation/articles fix",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 203,205 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_ids_203_205.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Preview 203 after comma-preserve early return",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 203 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_id_203.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Re-preview 203 after build_ui_display comma hook",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 203 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_id_203.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Preview 203 & 205 after verbatim preservation",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 203,205 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_ids_203_205.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Preview 203 only after final comma guard",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 203 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_id_203.json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Preview 203 & 205 after earliest guard",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\.venv\\Scripts\\python.exe .\\scripts\\30_normalize_match\\backfill_english_tokens.py --db-url sqlite:///./data/stl_manager_v1.db --ids 203,205 --materialize-ui --force --tabletop-only --out reports/backfill_ui_display_preview_tabletop_ids_203_205.json"
+			],
+			"group": "build"
+		}
+	],
+	"inputs": [
+		{
+			"id": "mmf_username",
+			"type": "promptString",
+			"description": "MyMiniFactory username (creator)",
+			"default": "TitanForgeMiniatures"
+		},
+		{
+			"id": "mmf_use_api_key",
+			"type": "pickString",
+			"description": "Auth mode",
+			"options": [
+				"--use-api-key",
+				""
+			],
+			"default": "--use-api-key"
+		}
+	]
+}
