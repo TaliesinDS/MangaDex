@@ -84,6 +84,14 @@ These settings are used when Migrate or Rehoming is enabled.
 
 ---
 
+## Safety & Defaults
+
+- Non-destructive by default: migration keeps the original entry unless you explicitly enable removal.
+- Destructive actions are labeled “(destructive)” in red throughout the GUI.
+- When a destructive action is enabled, a confirmation dialog appears (once) with an option to “Don’t show again”.
+
+---
+
 ## System Requirements
 
 - Windows 10/11 (official support; packaged EXE available)

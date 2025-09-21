@@ -1632,7 +1632,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--migrate-threshold-chapters", type=int, default=1, help="Only migrate entries with fewer than this many chapters (default 1)")
     p.add_argument("--migrate-sources", help="Preferred alternative sources (comma-separated fragments). If omitted, uses --rehoming-sources")
     p.add_argument("--exclude-sources", default="comick,hitomi", help="Comma-separated source name fragments to always exclude (default: 'comick,hitomi')")
-    p.add_argument("--migrate-remove", action=argparse.BooleanOptionalAction, default=True, help="Remove the original library entry after a successful migration (default: enabled; use --no-migrate-remove to keep the original)")
+    p.add_argument("--migrate-remove", action=argparse.BooleanOptionalAction, default=False, help="Remove the original library entry after a successful migration (default: disabled; pass --migrate-remove to enable removal)")
     p.add_argument("--migrate-remove-if-duplicate", action="store_true", help="If the selected alternative already exists in the library and has >0 chapters, remove the original zero/low-chapter entry instead of adding a duplicate")
     p.add_argument("--debug-library", action="store_true", help="Verbose diagnostics for library and chapter listing endpoints during migration")
     p.add_argument("--request-timeout", type=float, default=12.0, help="Default HTTP request timeout in seconds (default 12)")

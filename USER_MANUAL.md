@@ -10,24 +10,32 @@ For a feature overview and quick-start summary, see the README in this repositor
 
 It can:
 
-- Add every manga you follow on MangaDex into your Suwayomi library.
-- (Optional) Put each manga into categories based on your MangaDex reading status (Reading, Completed, Dropped, etc.).
-- (Optional) Mark chapters as read in Suwayomi to match what you have already read on MangaDex.
-- (Optional) Use a local bookmarks/list file instead of your live follows.
-- Migrate entries already in your Suwayomi library to alternative sources (e.g., Weeb Central, MangaPark) when the original source has 0 or very few chapters. This is useful for delisted/DMCA’d manga on MangaDex.
+- Add every manga you follow on MangaDex into your Suwayomi library
+- (Optional) Put each manga into categories based on your MangaDex reading status (Reading, Completed, Dropped, etc.)
+- (Optional) Mark chapters as read in Suwayomi to match what you have already read on MangaDex
+- (Optional) Use a local bookmarks/list file instead of live follows (txt/csv/xlsx/json/html)
+- Migrate entries already in your Suwayomi library to alternative sources (e.g., MangaPark, Weeb Central) when the original source has 0 or very few chapters
 
 It does **not**:
 
-- Create categories automatically (you should create them in Suwayomi first and note their numeric IDs).
-- Recover chapters that have been DMCA removed or delisted from MangaDex.
-- Sync continuously (it is a one‑time or occasional run tool).
+- Create categories automatically (please create them in Suwayomi first and note their numeric IDs)
+- Recover chapters that have been DMCA removed or delisted from MangaDex
+- Sync continuously (this is a one‑time or occasional run tool)
 
 Notes about connections/authentication:
 
-- The tool talks to your Suwayomi server using its REST API and, if needed, its GraphQL endpoint. Many Suwayomi builds expose GraphQL openly on <http://127.0.0.1:4567/api/graphql>, which lets this tool work even if some REST endpoints require a UI token.
-- If your server requires authentication for the endpoints this tool needs, you can pass --username/--password or --token. Otherwise you can leave auth out.
+- The tool talks to your Suwayomi server using its REST API and, if needed, GraphQL
+- If your server requires authentication for the endpoints this tool needs, pass `--username/--password` or `--token`; otherwise you can leave auth out
 
 ---
+
+## Safety & Defaults
+
+- Non‑destructive by default: migration keeps the original entry unless you explicitly enable removal
+- Destructive actions are labeled “(destructive)” in red throughout the GUI
+- The first time you enable a destructive action, a confirmation dialog appears with a “Don’t show again” option (re‑enable by deleting `%APPDATA%\MangaDex_Suwayomi\config.json`)
+
+
 
 ## 2. Prerequisites (What You Need First)
 
@@ -53,7 +61,6 @@ Notes about connections/authentication:
 
 1. Put the script files (`import_mangadex_bookmarks_to_suwayomi.py`, `run_importer.bat`, and this `USER_MANUAL.md`) together in a folder. For example: `C:\MangaDexImport`.
 2. (Optional) Create a shortcut to `run_importer.bat` on your Desktop so you can double‑click it.
-
 ---
 
 ## 4. Quick Start (Easiest Path)

@@ -170,6 +170,14 @@ For details, open the in‑app manual (Help button on each tab).
 
 ---
 
+## Safety & Defaults
+
+- Non-destructive by default: migrations do not remove originals unless you explicitly enable removal.
+- Destructive options in the GUI are marked in red with “(destructive)” labels.
+- The first time you enable any destructive action, the GUI shows a confirmation dialog with a “Don’t show again” option.
+
+---
+
 ## Title Matching (Migration & Rehoming)
 
 Some sources return popular/new lists even for specific searches. To prevent unrelated picks:

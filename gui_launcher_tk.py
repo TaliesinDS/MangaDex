@@ -258,8 +258,9 @@ def build_args(v: dict) -> List[str]:
             args += ["--migrate-keep-both"]
             if v['keep_both_min'].get().strip() and v['keep_both_min'].get().strip() != '1':
                 args += ["--keep-both-min-preferred", v['keep_both_min'].get().strip()]
-        if not v['remove_original'].get():
-            args += ["--no-migrate-remove"]
+        # Default is non-destructive; only add removal flag when explicitly enabled
+        if v['remove_original'].get():
+            args += ["--migrate-remove"]
         if v.get('migrate_remove_if_duplicate') and v['migrate_remove_if_duplicate'].get():
             args += ["--migrate-remove-if-duplicate"]
         if v.get('migrate_timeout') and v['migrate_timeout'].get().strip() and v['migrate_timeout'].get().strip() != '20.0':
@@ -406,6 +407,15 @@ def _save_config(cfg: dict) -> None:
 def main():
     root = tk.Tk()
     root.title('Seiyomi — Suwayomi Database Tool')
+    # Early stub to avoid reference-before-definition during initialization
+    def _render_preview():
+        pass
+    # Styles
+    try:
+        _style = ttk.Style(root)
+        _style.configure('Danger.TCheckbutton', foreground='#b00020')
+    except Exception:
+        pass
     # Optional window icon (PNG). Place a high-res PNG at assets/icon_256.png
     try:
         _icon_path = Path(__file__).parent / 'assets' / 'icon_256.png'
@@ -792,9 +802,10 @@ def main():
         'prefer_boost': tk.StringVar(value='3'),
     'migrate_title_threshold': tk.StringVar(value='0.6'),
     'migrate_title_strict': tk.BooleanVar(value=False),
-        'keep_both': tk.BooleanVar(value=False),
+    'keep_both': tk.BooleanVar(value=False),
         'keep_both_min': tk.StringVar(value='1'),
-        'remove_original': tk.BooleanVar(value=True),
+    # Default to non-destructive removal
+    'remove_original': tk.BooleanVar(value=False),
         'migrate_remove_if_duplicate': tk.BooleanVar(value=False),
         'migrate_timeout': tk.StringVar(value='20.0'),
         'migrate_max_sources_per_site': tk.StringVar(value='3'),
@@ -981,10 +992,10 @@ def main():
     attach_tip(cb_keep_both, 'Keep both the preferred and the alternative if they complement each other.')
     ttk.Label(mig, text='Second must have >= preferred ch.').grid(row=r, column=1, sticky='e'); en_keep_both_min = ttk.Entry(mig, textvariable=vals['keep_both_min'], width=6); en_keep_both_min.grid(row=r, column=2, sticky='w'); r+=1
     attach_tip(en_keep_both_min, 'Only keep both if the second entry has at least this many of the preferred chapters.')
-    cb_remove_original = ttk.Checkbutton(mig, text='Remove original after migration (default ON)', variable=vals['remove_original']); cb_remove_original.grid(row=r, column=0, sticky='w')
-    attach_tip(cb_remove_original, 'After migration, remove the original (unless No remove is set).')
-    cb_remove_dup = ttk.Checkbutton(mig, text='Remove if duplicate alternative exists', variable=vals['migrate_remove_if_duplicate']); cb_remove_dup.grid(row=r, column=1, sticky='w'); r+=1
-    attach_tip(cb_remove_dup, 'If the alternative is a duplicate of the original, remove the original.')
+    cb_remove_original = ttk.Checkbutton(mig, text='Remove original after migration (destructive)', variable=vals['remove_original'], style='Danger.TCheckbutton'); cb_remove_original.grid(row=r, column=0, sticky='w')
+    attach_tip(cb_remove_original, 'Destructive: after migration, remove the original entry. Default OFF.')
+    cb_remove_dup = ttk.Checkbutton(mig, text='Remove if duplicate alternative exists (destructive)', variable=vals['migrate_remove_if_duplicate'], style='Danger.TCheckbutton'); cb_remove_dup.grid(row=r, column=1, sticky='w'); r+=1
+    attach_tip(cb_remove_dup, 'Destructive: if the alternative already exists, remove the original zero/low-chapter entry.')
     ttk.Label(mig, text='Filter title (optional)').grid(row=r, column=0, sticky='w'); en_filter_title = ttk.Entry(mig, textvariable=vals['filter_title'], width=50); en_filter_title.grid(row=r, column=1, sticky='we'); r+=1
     attach_tip(en_filter_title, 'Only process titles containing this substring.')
     ttk.Label(mig, text='Timeout (s)').grid(row=r, column=0, sticky='w'); en_timeout = ttk.Entry(mig, textvariable=vals['migrate_timeout'], width=8); en_timeout.grid(row=r, column=1, sticky='w')
@@ -1035,8 +1046,8 @@ def main():
     attach_tip(en_rh_src, 'Ordered list of alternative sources to try (e.g. mangasee,comick).')
     ttk.Label(rh, text='Skip if MD chapters >= ').grid(row=rr, column=0, sticky='w'); en_rh_skip = ttk.Entry(rh, textvariable=vals['rehoming_skip_ge'], width=6); en_rh_skip.grid(row=rr, column=1, sticky='w')
     attach_tip(en_rh_skip, 'If the MangaDex entry already has at least this many chapters, skip rehoming.')
-    cb_rh_rm = ttk.Checkbutton(rh, text='Remove MangaDex entry after rehome', variable=vals['rehoming_remove_mangadex']); cb_rh_rm.grid(row=rr, column=2, sticky='w'); rr+=1
-    attach_tip(cb_rh_rm, 'After a successful rehome, remove the original MangaDex entry (if supported).')
+    cb_rh_rm = ttk.Checkbutton(rh, text='Remove MangaDex entry after rehome (destructive)', variable=vals['rehoming_remove_mangadex'], style='Danger.TCheckbutton'); cb_rh_rm.grid(row=rr, column=2, sticky='w'); rr+=1
+    attach_tip(cb_rh_rm, 'Destructive: after a successful rehome, remove the original MangaDex entry (if supported).')
  
     # Prune tab
     pr = ttk.Frame(nb)
@@ -1044,11 +1055,13 @@ def main():
     # Tab description + help
     desc_p = ttk.Frame(pr); desc_p.grid(row=0, column=0, columnspan=2, sticky='we', pady=(4, 6))
     ttk.Label(desc_p, text='Clean up your library by removing duplicates or entries in non-preferred languages.', foreground='#444').pack(side='left')
+    # Small red warning note for destructive actions in this tab
+    ttk.Label(pr, text='Warning: actions in this tab can remove entries (destructive).', foreground='#b00020').grid(row=0, column=1, sticky='e', padx=(6, 8))
     ttk.Button(desc_p, text='Help', width=5, command=lambda: (_save_config({**_load_config(), 'manual_find_text': 'Prune'}), show_manual_popup())).pack(side='right')
     r = 1
     pr.grid_columnconfigure(1, weight=1)
-    cb_pr_zero = ttk.Checkbutton(pr, text='Remove zero/low-chapter duplicates', variable=vals['prune_zero']); cb_pr_zero.grid(row=r, column=0, sticky='w'); r+=1
-    attach_tip(cb_pr_zero, 'When multiple entries share a title, keep one with chapters >= threshold and remove the rest.')
+    cb_pr_zero = ttk.Checkbutton(pr, text='Remove zero/low-chapter duplicates (destructive)', variable=vals['prune_zero'], style='Danger.TCheckbutton'); cb_pr_zero.grid(row=r, column=0, sticky='w'); r+=1
+    attach_tip(cb_pr_zero, 'Destructive: when multiple entries share a title, keep one (>= threshold) and remove the rest.')
     ttk.Label(pr, text='Keep entries with >= chapters').grid(row=r, column=0, sticky='w'); en_pr_keep = ttk.Entry(pr, textvariable=vals['prune_thresh'], width=6); en_pr_keep.grid(row=r, column=1, sticky='w'); r+=1
     attach_tip(en_pr_keep, 'Entries with chapters >= this number are considered keepers during duplicate pruning.')
     ttk.Label(pr, text='Filter by title substring').grid(row=r, column=0, sticky='w'); en_pr_filter = ttk.Entry(pr, textvariable=vals['prune_filter_title']); en_pr_filter.grid(row=r, column=1, sticky='we'); r+=1
@@ -1059,8 +1072,8 @@ def main():
     langf.grid(row=r, column=0, columnspan=2, sticky='nsew', pady=(6, 0))
     langf.grid_columnconfigure(1, weight=1)
     rr = 0
-    cb_pr_lang = ttk.Checkbutton(langf, text='Prune non-preferred languages', variable=vals['prune_nonpref']); cb_pr_lang.grid(row=rr, column=0, sticky='w', columnspan=3); rr+=1
-    attach_tip(cb_pr_lang, 'If another same-title entry has preferred-language chapters, remove entries without them.')
+    cb_pr_lang = ttk.Checkbutton(langf, text='Prune non-preferred languages (destructive)', variable=vals['prune_nonpref'], style='Danger.TCheckbutton'); cb_pr_lang.grid(row=rr, column=0, sticky='w', columnspan=3); rr+=1
+    attach_tip(cb_pr_lang, 'Destructive: if another same-title entry has preferred-language chapters, remove entries without them.')
     ttk.Label(langf, text='Preferred languages').grid(row=rr, column=0, sticky='w')
     en_pr_langs = ttk.Entry(langf, textvariable=vals['pref_langs']); en_pr_langs.grid(row=rr, column=1, sticky='we', padx=(4, 4))
     attach_tip(en_pr_langs, "Comma-separated language codes to prefer, e.g. 'en,en-us'.")
@@ -1283,6 +1296,53 @@ def main():
         if not vals['base_url'].get().strip():
             messagebox.showerror('Error', 'Base URL is required')
             return
+        # Show destructive warning if needed
+        try:
+            cfg = _load_config()
+            suppress = bool(cfg.get('suppress_destructive_warning', False))
+        except Exception:
+            suppress = False
+        destructive_flags = []
+        if vals['remove_original'].get():
+            destructive_flags.append('Remove original after migration')
+        if vals.get('rehoming_remove_mangadex') and vals['rehoming_remove_mangadex'].get():
+            destructive_flags.append('Remove MangaDex entry after rehome')
+        if vals.get('prune_zero') and vals['prune_zero'].get():
+            destructive_flags.append('Prune zero/low‑chapter duplicates')
+        if vals.get('prune_nonpref') and vals['prune_nonpref'].get():
+            destructive_flags.append('Prune non‑preferred languages')
+
+        if destructive_flags and not suppress:
+            proceed = {'ok': False}
+            dont_show = tk.BooleanVar(value=False)
+
+            top = tk.Toplevel(root)
+            top.title('Confirm destructive actions')
+            top.transient(root)
+            top.grab_set()
+            msg = 'You are about to run actions that modify or remove entries:\n\n- ' + '\n- '.join(destructive_flags) + '\n\nThis cannot be easily undone. Proceed?'
+            ttk.Label(top, text=msg, justify='left', foreground='#b00020', wraplength=520).pack(padx=12, pady=(12, 6))
+            ttk.Checkbutton(top, text="Don't show this again", variable=dont_show).pack(anchor='w', padx=12, pady=(0, 8))
+
+            btns = ttk.Frame(top); btns.pack(fill='x', padx=12, pady=(0,12))
+            def _cancel():
+                proceed['ok'] = False
+                top.destroy()
+            def _proceed():
+                proceed['ok'] = True
+                try:
+                    cfg = _load_config()
+                    if dont_show.get():
+                        cfg['suppress_destructive_warning'] = True
+                        _save_config(cfg)
+                except Exception:
+                    pass
+                top.destroy()
+            ttk.Button(btns, text='Cancel', command=_cancel).pack(side='right')
+            ttk.Button(btns, text='Proceed', command=_proceed).pack(side='right', padx=(0,8))
+            root.wait_window(top)
+            if not proceed['ok']:
+                return
         args = build_args(vals)
         try:
             launch_command(args, vals['save_log'].get(), vals['log_path'].get().strip() or None, vals['external_terminal'].get())
@@ -1302,10 +1362,12 @@ def main():
         vals['prefer_sources'].set('asura,flame,genz,utoons')
         vals['prefer_boost'].set('3')
         vals['read_delay'].set('1')
-        vals['keep_both_min'].set('1')
-        vals['prune_thresh'].set('1')
-        vals['prune_lang_thresh'].set('1')
-        _render_preview()
+    vals['keep_both_min'].set('1')
+    vals['prune_thresh'].set('1')
+    vals['prune_lang_thresh'].set('1')
+    # Non-destructive defaults
+    vals['remove_original'].set(False)
+    _render_preview()
 
     # Left corner: Run then Reset
     bt_run = ttk.Button(btn_frame, text='Run Script', command=on_run); bt_run.pack(side='left')
