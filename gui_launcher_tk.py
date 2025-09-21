@@ -378,7 +378,15 @@ def _save_config(cfg: dict) -> None:
 
 def main():
     root = tk.Tk()
-    root.title('Suwayomi Database Tool')
+    root.title('Seiyomi — Suwayomi Database Tool')
+    # Optional window icon (PNG). Place a high-res PNG at assets/icon_256.png
+    try:
+        _icon_path = Path(__file__).parent / 'assets' / 'icon_256.png'
+        if _icon_path.exists():
+            root._icon_img = tk.PhotoImage(file=str(_icon_path))  # keep ref to avoid GC
+            root.iconphoto(True, root._icon_img)
+    except Exception:
+        pass
 
     def open_manual():
         manual = Path(__file__).parent / 'USER_MANUAL.md'
@@ -913,7 +921,7 @@ def main():
     r += 1
     cb_mig_lib = ttk.Checkbutton(mig, text='Migrate library', variable=vals['migrate_lib'])
     cb_mig_lib.grid(row=r, column=0, sticky='w'); r+=1
-    attach_tip(cb_mig_lib, 'Scan your current Suwayomi library and add an alternative source for entries under a chapter threshold. See manual: Migration > Overview')
+    attach_tip(cb_mig_lib, 'Scan your current Suwayomi library and add an alternative source for entries under a chapter threshold. Uses Title Matching settings below for source picking (when enabled). See manual: Migration > Overview')
     ttk.Label(mig, text='Threshold chapters <').grid(row=r, column=0, sticky='w'); en_mig_thresh = ttk.Entry(mig, textvariable=vals['migrate_threshold'], width=6); en_mig_thresh.grid(row=r, column=1, sticky='w'); r+=1
     attach_tip(en_mig_thresh, 'Only entries with fewer chapters than this will be considered for migration.')
     ttk.Label(mig, text='Include categories (ids/names, comma)').grid(row=r, column=0, sticky='w'); en_inc_cats = ttk.Entry(mig, textvariable=vals['migrate_include_categories'], width=50); en_inc_cats.grid(row=r, column=1, sticky='we'); r+=1
@@ -967,23 +975,37 @@ def main():
     rr = 0
     ttk.Label(tm, text='Similarity threshold (0..1)').grid(row=rr, column=0, sticky='w')
     en_thr = ttk.Entry(tm, textvariable=vals['migrate_title_threshold'], width=6); en_thr.grid(row=rr, column=1, sticky='w')
-    try:
-        en_thr.bind('<KeyRelease>', lambda e: _update_preview())
-        en_thr.bind('<FocusOut>', lambda e: _update_preview())
-    except Exception:
-        pass
     attach_tip(en_thr, 'Only accept candidates whose normalized title similarity meets this threshold (default 0.6).')
-    cb_strict = ttk.Checkbutton(tm, text='Strict (normalized exact/containment only)', variable=vals['migrate_title_strict'], command=lambda: _update_preview())
+    cb_strict = ttk.Checkbutton(tm, text='Strict (normalized exact/containment only)', variable=vals['migrate_title_strict'])
     cb_strict.grid(row=rr, column=2, columnspan=2, sticky='w'); rr+=1
     attach_tip(cb_strict, 'Require near-exact matches of normalized titles; disables fuzzy-only matches.')
+    hint_lbl = ttk.Label(tm, text='Active when either Migrate library or Rehoming is enabled.', foreground='#666')
+    hint_lbl.grid(row=rr, column=0, columnspan=4, sticky='w', pady=(2,0)); rr+=1
     r += 1
+
+    # Enable/disable Title Matching based on relevant toggles
+    def _refresh_title_matching_enabled(*_a):
+        active = bool(vals['migrate_lib'].get() or vals['rehoming_enabled'].get())
+        try:
+            en_thr.configure(state='normal' if active else 'disabled')
+            cb_strict.configure(state='normal' if active else 'disabled')
+            hint_lbl.configure(foreground='#666' if active else '#888')
+        except Exception:
+            pass
+
+    try:
+        vals['migrate_lib'].trace_add('write', _refresh_title_matching_enabled)
+        vals['rehoming_enabled'].trace_add('write', _refresh_title_matching_enabled)
+    except Exception:
+        pass
+    _refresh_title_matching_enabled()
  
     # Rehoming
     rh = ttk.LabelFrame(mig, text='Rehoming')
     rh.grid(row=r, column=0, columnspan=4, sticky='nsew', pady=(6,0))
     rr = 0
     cb_rh_en = ttk.Checkbutton(rh, text='Enable rehoming', variable=vals['rehoming_enabled']); cb_rh_en.grid(row=rr, column=0, sticky='w')
-    attach_tip(cb_rh_en, 'When a MangaDex entry has no chapters, try adding an alternative source entry instead.')
+    attach_tip(cb_rh_en, 'When a MangaDex entry has no chapters, try adding an alternative source entry instead. Uses Title Matching settings below to filter candidates.')
     ttk.Label(rh, text='Rehoming sources (comma)').grid(row=rr, column=1, sticky='e'); en_rh_src = ttk.Entry(rh, textvariable=vals['rehoming_sources'], width=40); en_rh_src.grid(row=rr, column=2, sticky='w'); rr+=1
     attach_tip(en_rh_src, 'Ordered list of alternative sources to try (e.g. mangasee,comick).')
     ttk.Label(rh, text='Skip if MD chapters >= ').grid(row=rr, column=0, sticky='w'); en_rh_skip = ttk.Entry(rh, textvariable=vals['rehoming_skip_ge'], width=6); en_rh_skip.grid(row=rr, column=1, sticky='w')
@@ -1037,10 +1059,6 @@ def main():
     ttk.Label(ms, text='Preset').grid(row=r, column=0, sticky='w')
     preset_cb = ttk.Combobox(ms, textvariable=vals['preset'], values=['Prefer English Migration','Cleanup Non-English','Keep Both (Quality+Coverage)'], state='readonly', width=35)
     preset_cb.grid(row=r, column=1, sticky='w')
-    try:
-        preset_cb.bind('<<ComboboxSelected>>', lambda e: _update_preview())
-    except Exception:
-        pass
     attach_tip(preset_cb, 'Apply a curated set of options for common workflows.')
     def _apply():
         if vals['preset'].get():
@@ -1073,12 +1091,7 @@ def main():
     sep1.grid(row=r, column=0, columnspan=3, sticky='nsew', pady=(8,4), padx=(0,0))
     rr = 0
     ttk.Label(sep1, text='Auth mode').grid(row=rr, column=0, sticky='w')
-    cb_auth = ttk.Combobox(sep1, textvariable=vals['auth_mode'], values=['auto','basic','simple','bearer'], width=10, state='readonly'); cb_auth.grid(row=rr, column=1, sticky='w')
-    try:
-        cb_auth.bind('<<ComboboxSelected>>', lambda e: _update_preview())
-    except Exception:
-        pass
-    rr+=1
+    cb_auth = ttk.Combobox(sep1, textvariable=vals['auth_mode'], values=['auto','basic','simple','bearer'], width=10, state='readonly'); cb_auth.grid(row=rr, column=1, sticky='w'); rr+=1
     attach_tip(cb_auth, 'Authentication strategy for Suwayomi: auto (detect), basic, simple (UI login), or bearer (API token).')
     ttk.Label(sep1, text='Username').grid(row=rr, column=0, sticky='w'); en_su_user = ttk.Entry(sep1, textvariable=vals['su_user'], width=22); en_su_user.grid(row=rr, column=1, sticky='w')
     attach_tip(en_su_user, 'Suwayomi username (for BASIC/SIMPLE)')
@@ -1150,9 +1163,9 @@ def main():
     about = ttk.Frame(nb)
     nb.add(about, text='About')
     ar = 0
-    ab_hdr = ttk.Label(about, text='Suwayomi Database Tool', font=('Segoe UI', 12, 'bold'))
+    ab_hdr = ttk.Label(about, text='Seiyomi — Suwayomi Database Tool', font=('Segoe UI', 12, 'bold'))
     ab_hdr.grid(row=ar, column=0, columnspan=3, sticky='w', padx=8, pady=(8, 4)); ar+=1
-    ab_desc = ttk.Label(about, text='A helper GUI to import from MangaDex, migrate library entries between sources, and prune duplicates in Suwayomi.', wraplength=780, justify='left')
+    ab_desc = ttk.Label(about, text='A helper GUI to import from MangaDex, migrate between sources, and prune duplicates in Suwayomi — now branded Seiyomi (整読み, “organize reading”).', wraplength=780, justify='left')
     ab_desc.grid(row=ar, column=0, columnspan=3, sticky='w', padx=8); ar+=1
     # Environment
     try:
@@ -1246,7 +1259,7 @@ def main():
         vals['keep_both_min'].set('1')
         vals['prune_thresh'].set('1')
         vals['prune_lang_thresh'].set('1')
-        _update_preview()
+        _render_preview()
 
     # Left corner: Run then Reset
     bt_run = ttk.Button(btn_frame, text='Run Script', command=on_run); bt_run.pack(side='left')
@@ -1268,7 +1281,10 @@ def main():
     bt_exit = ttk.Button(btn_frame, text='Exit', command=root.destroy); bt_exit.pack(side='right', padx=(6, 0))
     attach_tip(bt_exit, 'Close the tool.')
 
-    def _update_preview():
+    # Debounced preview update to avoid lag during rapid changes
+    preview_after_id = None
+
+    def _render_preview():
         # Build the exact command that will run
         args = build_args(vals)
         cli_exe = find_cli_executable()
@@ -1295,13 +1311,23 @@ def main():
         preview_txt.insert('1.0', cmd_str)
         preview_txt.configure(state='disabled')
 
+    def _update_preview():
+        nonlocal preview_after_id
+        try:
+            if preview_after_id is not None:
+                root.after_cancel(preview_after_id)
+        except Exception:
+            pass
+        # 120 ms debounce window
+        preview_after_id = root.after(120, _render_preview)
+
     # Trace all variables to refresh preview when they change
     for var in vals.values():
         try:
             var.trace_add('write', lambda *args: _update_preview())
         except Exception:
             pass
-    _update_preview()
+    _render_preview()
 
     root.mainloop()
 

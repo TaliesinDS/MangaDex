@@ -1,4 +1,10 @@
-# Suwayomi Database Tool (with GUI)
+# Seiyomi — Suwayomi Database Tool (with GUI)
+
+<div align="center">
+
+<img src="assets/icon_256.png" alt="Seiyomi icon (整)" width="128" height="128" />
+
+</div>
 
 A desktop helper for Suwayomi that brings together:
 
@@ -8,6 +14,16 @@ A desktop helper for Suwayomi that brings together:
 - Suwayomi connection utilities (auth modes, categories, throttling)
 
 It includes a Tkinter-based GUI with live command preview and presets, plus a direct command-line interface for automation.
+
+---
+
+## Why “Seiyomi”?
+
+- Name: Seiyomi (整読み) combines 整 (sei, “organize/order”) with 読み (yomi, “reading”).
+- Meaning: “Organize reading” — a nod to how this tool manages, migrates, and tidies your Suwayomi library.
+- Icon: A white 整 glyph on black with a light‑blue ring, optimized to scale cleanly as a 16–256 px app icon.
+
+This mirrors the tradition of names like Tachiyomi (立ち読み, “stand and read”) and Suwayomi (座り読み, “sit and read”). Seiyomi focuses on organizing and curating your library.
 
 ---
 
