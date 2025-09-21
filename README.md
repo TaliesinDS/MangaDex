@@ -17,6 +17,16 @@ It includes a Tkinter-based GUI with live command preview and presets, plus a di
 
 ---
 
+## Preview (Migrate tab)
+
+<div align="center">
+
+<img src="assets/image.png" alt="Seiyomi Migrate tab preview" style="max-width: 100%; border: 1px solid #ddd; border-radius: 6px;" />
+
+</div>
+
+---
+
 ## System Requirements
 
 - Windows 10/11 (official support; packaged EXE available)
