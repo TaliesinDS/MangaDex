@@ -104,6 +104,7 @@ python import_mangadex_bookmarks_to_suwayomi.py `
   --migrate-threshold-chapters 1 `
   --migrate-sources "bato.to,mangabuddy,weeb central,mangapark" `
   --exclude-sources "comick,hitomi" `
+  --migrate-title-threshold 0.7 `
   --best-source `
   --best-source-canonical `
   --best-source-candidates 4 `
@@ -127,9 +128,21 @@ See `userscripts/README.md` for a Tampermonkey/Violentmonkey script that adds a 
 - Turn on Debug output in Settings for verbose logs
 - If auth fails: try different auth modes (auto/basic/simple/bearer) and tokens
 - If migration returns few results: raise best‑source candidates and timeout, and consider Preferred only off
+- If migration/rehoming picks the wrong title: tune title matching with `--migrate-title-threshold` (default 0.6), or enforce strict matches via `--migrate-title-strict`
 - Status mapping issues: enable Map debug and Print status summary
 
 For details, open the in‑app manual (Help button on each tab).
+
+---
+
+## Title Matching (Migration & Rehoming)
+
+Some sources return popular/new lists even for specific searches. To prevent unrelated picks:
+
+- `--migrate-title-threshold <0..1>`: Require a minimum normalized title similarity (Jaccard over cleaned tokens). Default: `0.6`.
+- `--migrate-title-strict`: Require normalized exact/containment matches; disables fuzzy-only matches.
+
+These checks are applied before selecting candidates for both migration and rehoming. If no candidates pass, that source is skipped.
 
 ---
 

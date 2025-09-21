@@ -209,6 +209,11 @@ def build_args(v: dict) -> List[str]:
             args += ["--rehoming-skip-if-chapters-ge", v['rehoming_skip_ge'].get().strip()]
         if v.get('rehoming_remove_mangadex') and v['rehoming_remove_mangadex'].get():
             args += ["--rehoming-remove-mangadex"]
+        # Reuse title-matching options when rehoming is enabled
+        if v.get('migrate_title_threshold') and v['migrate_title_threshold'].get().strip() and v['migrate_title_threshold'].get().strip() != '0.6':
+            args += ["--migrate-title-threshold", v['migrate_title_threshold'].get().strip()]
+        if v.get('migrate_title_strict') and v['migrate_title_strict'].get():
+            args += ["--migrate-title-strict"]
 
     # Migration
     if v['migrate_lib'].get():
@@ -259,6 +264,11 @@ def build_args(v: dict) -> List[str]:
             args += ["--migrate-try-second-page"]
         if v['filter_title'].get().strip():
             args += ["--migrate-filter-title", v['filter_title'].get().strip()]
+        # Title matching options
+        if v.get('migrate_title_threshold') and v['migrate_title_threshold'].get().strip() and v['migrate_title_threshold'].get().strip() != '0.6':
+            args += ["--migrate-title-threshold", v['migrate_title_threshold'].get().strip()]
+        if v.get('migrate_title_strict') and v['migrate_title_strict'].get():
+            args += ["--migrate-title-strict"]
 
     # Prune
     if v['prune_zero'].get():
@@ -747,6 +757,8 @@ def main():
         'lang_fallback': tk.BooleanVar(value=False),
         'prefer_sources': tk.StringVar(value='asura,flame,genz,utoons'),
         'prefer_boost': tk.StringVar(value='3'),
+    'migrate_title_threshold': tk.StringVar(value='0.6'),
+    'migrate_title_strict': tk.BooleanVar(value=False),
         'keep_both': tk.BooleanVar(value=False),
         'keep_both_min': tk.StringVar(value='1'),
         'remove_original': tk.BooleanVar(value=True),
@@ -948,6 +960,23 @@ def main():
     attach_tip(en_max_sources_site, 'Limit of source candidates fetched per site (performance control).')
     cb_try_second = ttk.Checkbutton(mig, text='Try second page if no results', variable=vals['migrate_try_second_page']); cb_try_second.grid(row=r, column=0, sticky='w'); r+=1
     attach_tip(cb_try_second, 'If search returns nothing on the first page, also try page 2.')
+
+    # Title Matching (Migration & Rehoming)
+    tm = ttk.LabelFrame(mig, text='Title Matching (Migration & Rehoming)')
+    tm.grid(row=r, column=0, columnspan=4, sticky='nsew', pady=(6,0))
+    rr = 0
+    ttk.Label(tm, text='Similarity threshold (0..1)').grid(row=rr, column=0, sticky='w')
+    en_thr = ttk.Entry(tm, textvariable=vals['migrate_title_threshold'], width=6); en_thr.grid(row=rr, column=1, sticky='w')
+    try:
+        en_thr.bind('<KeyRelease>', lambda e: _update_preview())
+        en_thr.bind('<FocusOut>', lambda e: _update_preview())
+    except Exception:
+        pass
+    attach_tip(en_thr, 'Only accept candidates whose normalized title similarity meets this threshold (default 0.6).')
+    cb_strict = ttk.Checkbutton(tm, text='Strict (normalized exact/containment only)', variable=vals['migrate_title_strict'], command=lambda: _update_preview())
+    cb_strict.grid(row=rr, column=2, columnspan=2, sticky='w'); rr+=1
+    attach_tip(cb_strict, 'Require near-exact matches of normalized titles; disables fuzzy-only matches.')
+    r += 1
  
     # Rehoming
     rh = ttk.LabelFrame(mig, text='Rehoming')
@@ -1008,6 +1037,10 @@ def main():
     ttk.Label(ms, text='Preset').grid(row=r, column=0, sticky='w')
     preset_cb = ttk.Combobox(ms, textvariable=vals['preset'], values=['Prefer English Migration','Cleanup Non-English','Keep Both (Quality+Coverage)'], state='readonly', width=35)
     preset_cb.grid(row=r, column=1, sticky='w')
+    try:
+        preset_cb.bind('<<ComboboxSelected>>', lambda e: _update_preview())
+    except Exception:
+        pass
     attach_tip(preset_cb, 'Apply a curated set of options for common workflows.')
     def _apply():
         if vals['preset'].get():
@@ -1040,7 +1073,12 @@ def main():
     sep1.grid(row=r, column=0, columnspan=3, sticky='nsew', pady=(8,4), padx=(0,0))
     rr = 0
     ttk.Label(sep1, text='Auth mode').grid(row=rr, column=0, sticky='w')
-    cb_auth = ttk.Combobox(sep1, textvariable=vals['auth_mode'], values=['auto','basic','simple','bearer'], width=10, state='readonly'); cb_auth.grid(row=rr, column=1, sticky='w'); rr+=1
+    cb_auth = ttk.Combobox(sep1, textvariable=vals['auth_mode'], values=['auto','basic','simple','bearer'], width=10, state='readonly'); cb_auth.grid(row=rr, column=1, sticky='w')
+    try:
+        cb_auth.bind('<<ComboboxSelected>>', lambda e: _update_preview())
+    except Exception:
+        pass
+    rr+=1
     attach_tip(cb_auth, 'Authentication strategy for Suwayomi: auto (detect), basic, simple (UI login), or bearer (API token).')
     ttk.Label(sep1, text='Username').grid(row=rr, column=0, sticky='w'); en_su_user = ttk.Entry(sep1, textvariable=vals['su_user'], width=22); en_su_user.grid(row=rr, column=1, sticky='w')
     attach_tip(en_su_user, 'Suwayomi username (for BASIC/SIMPLE)')

@@ -24,6 +24,56 @@ def truncate_text(t: str, limit: int = 200) -> str:
     t = (t or "").replace('\n', ' ')[:limit]
     return t + ("..." if len(t) == limit else "")
 
+# --- Title matching helpers ---
+_STOPWORDS = {
+    'a','an','the','and','or','of','in','on','to','for','by','with','as','at','from','now','i','you','we','they','is','are'
+}
+
+def _normalize_title_tokens(s: str) -> List[str]:
+    """Normalize title to comparable tokens.
+    - lowercases
+    - strips bracketed/parenthetical noise like (Official), [Color], {whatever}
+    - removes punctuation
+    - collapses whitespace
+    - removes short/stop words
+    """
+    s = s or ""
+    s = s.lower().strip()
+    # remove bracketed content
+    s = re.sub(r"[\(\[\{].*?[\)\]\}]", " ", s)
+    # drop common noise words explicitly
+    s = s.replace("official", " ")
+    s = s.replace("colored", " ")
+    s = s.replace("colour", " ")
+    # normalize punctuation to space
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    toks = [t for t in s.split() if len(t) > 1 and t not in _STOPWORDS]
+    return toks
+
+def _title_similarity(a: str, b: str) -> float:
+    """Simple token Jaccard similarity between two titles after normalization."""
+    ta = set(_normalize_title_tokens(a))
+    tb = set(_normalize_title_tokens(b))
+    if not ta or not tb:
+        return 0.0
+    inter = ta & tb
+    union = ta | tb
+    return len(inter) / len(union) if union else 0.0
+
+def _is_title_match(a: str, b: str, threshold: float = 0.6, strict_exact: bool = False) -> bool:
+    na = " ".join(_normalize_title_tokens(a))
+    nb = " ".join(_normalize_title_tokens(b))
+    if not na or not nb:
+        return False
+    if na == nb:
+        return True
+    if strict_exact:
+        return False
+    # allow substring containment of normalized forms as a light-weight near-exact
+    if na in nb or nb in na:
+        return True
+    return _title_similarity(a, b) >= max(0.0, min(1.0, threshold))
+
 # --- Helpers: detect MangaDex IDs/URLs ---
 MD_ID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 MD_URL_RE = re.compile(r"https?://(www\.)?mangadex\.org/title/([0-9a-fA-F-]{36})(?:/|$)")
@@ -837,22 +887,37 @@ def search_by_title(client: SuwayomiClient, source_id: int, title: str) -> Optio
     except Exception:
         return None
     items = resp.get("mangaList") or resp.get("mangaListData") or resp.get("manga_list") or []
-    norm_title = title.lower()
-    best: Optional[int] = None
-    best_len_diff = 10**9
+    # Prefer exact/normalized equality first
+    exact_norm = " ".join(_normalize_title_tokens(title))
+    exact_id: Optional[int] = None
     for it in items:
-        t = str(it.get("title") or it.get("name") or "").lower()
-        if not t:
+        cand = str(it.get("title") or it.get("name") or "")
+        if not cand:
             continue
-        if norm_title == t:
-            return int(it.get("id"))
-        if norm_title in t or t in norm_title:
-            # pick closest length difference as heuristic
-            diff = abs(len(t) - len(norm_title))
-            if diff < best_len_diff:
-                best_len_diff = diff
-                best = int(it.get("id"))
-    return best
+        if " ".join(_normalize_title_tokens(cand)) == exact_norm:
+            try:
+                return int(it.get("id"))
+            except Exception:
+                continue
+    # Otherwise, pick the best similarity above threshold
+    best_id: Optional[int] = None
+    best_score = 0.0
+    for it in items:
+        cand = str(it.get("title") or it.get("name") or "")
+        if not cand:
+            continue
+        try:
+            score = _title_similarity(title, cand)
+        except Exception:
+            score = 0.0
+        if score > best_score:
+            best_score = score
+            try:
+                best_id = int(it.get("id"))
+            except Exception:
+                best_id = None
+    # Require a reasonable similarity to avoid random top lists
+    return best_id if best_score >= 0.6 else None
 
 
 def import_ids(
@@ -1071,12 +1136,22 @@ def import_ids(
                                 items = SuwayomiClient.normalize_search_items(search)
                                 if not items:
                                     continue
+                                # Filter by title similarity to avoid unrelated "top" lists
+                                def _cand_title(it: Dict[str, Any]) -> str:
+                                    return str(it.get('title') or it.get('name') or it.get('label') or '')
+                                threshold = float(rehome_conf.get('title_threshold') or 0.6)
+                                strict = bool(rehome_conf.get('title_strict') or False)
+                                filtered = [it for it in items if _is_title_match(title, _cand_title(it), threshold=threshold, strict_exact=strict)]
+                                if not filtered:
+                                    if show_progress:
+                                        print(f"{prefix}REHOME skip '{src.get('name')}' (no title match >= {threshold}{' strict' if strict else ''})")
+                                    continue
                                 # pick best candidate by chapter count if enabled
                                 alt_id = None
                                 if rehome_conf.get('best_source'):
                                     best_count = -1
                                     limit = int(rehome_conf.get('best_candidates') or 5)
-                                    for cand in items[:max(1, limit)]:
+                                    for cand in filtered[:max(1, limit)]:
                                         cid = SuwayomiClient.extract_manga_id(cand)
                                         if cid is None:
                                             continue
@@ -1092,9 +1167,9 @@ def import_ids(
                                             best_count = cnt
                                             alt_id = cid
                                 else:
-                                    alt_id = SuwayomiClient.extract_manga_id(items[0])
-                                if alt_id is None and int(rehome_conf.get('min_chapters_per_alt') or 0) <= 0 and items:
-                                    alt_id = SuwayomiClient.extract_manga_id(items[0])
+                                    alt_id = SuwayomiClient.extract_manga_id(filtered[0])
+                                if alt_id is None and int(rehome_conf.get('min_chapters_per_alt') or 0) <= 0 and filtered:
+                                    alt_id = SuwayomiClient.extract_manga_id(filtered[0])
                                 if alt_id is None:
                                     continue
                                 added_alt = client.add_to_library(alt_id)
@@ -1550,6 +1625,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--rehoming-sources", help="Comma-separated list of source name fragments in priority order (e.g. 'mangasee,comick')")
     p.add_argument("--rehoming-skip-if-chapters-ge", type=int, default=1, help="Skip rehoming if MangaDex already has at least this many chapters (default 1)")
     p.add_argument("--rehoming-remove-mangadex", action="store_true", help="After successful rehome, remove the MangaDex entry from library (if API supports it)")
+    p.add_argument("--migrate-title-threshold", type=float, default=0.6, help="Similarity threshold (0..1) for matching titles when selecting migrate/rehoming candidates (default 0.6)")
+    p.add_argument("--migrate-title-strict", action="store_true", help="Require normalized exact/containment title match when selecting candidates (disables fuzzy-only matches)")
     # Migrate existing library without MangaDex data
     p.add_argument("--migrate-library", action="store_true", help="Scan current Suwayomi library and add an alternative source for entries under a chapter threshold")
     p.add_argument("--migrate-threshold-chapters", type=int, default=1, help="Only migrate entries with fewer than this many chapters (default 1)")
@@ -2576,6 +2653,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         'best_candidates': int(args.best_source_candidates),
         'min_chapters_per_alt': int(args.min_chapters_per_alt),
         'canonical': bool(args.best_source_canonical),
+        'title_threshold': float(args.migrate_title_threshold),
+        'title_strict': bool(args.migrate_title_strict),
     } if args.rehoming_enabled else None,
     )
 

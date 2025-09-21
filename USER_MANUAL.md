@@ -86,6 +86,7 @@ python import_mangadex_bookmarks_to_suwayomi.py `
    --migrate-library `
    --migrate-threshold-chapters 1 `
    --migrate-sources "bato.to,mangabuddy,weeb central,mangapark" `
+   --migrate-title-threshold 0.7 `
    --migrate-preferred-only `
    --best-source `
    --best-source-canonical `
@@ -121,6 +122,7 @@ python import_mangadex_bookmarks_to_suwayomi.py `
    --migrate-library `
    --migrate-threshold-chapters 1 `
    --migrate-sources "bato.to,mangabuddy,weeb central,mangapark" `
+   --migrate-title-threshold 0.7 `
    --migrate-preferred-only `
    --best-source `
    --best-source-canonical `
@@ -151,6 +153,7 @@ python import_mangadex_bookmarks_to_suwayomi.py `
    --migrate-library `
    --migrate-threshold-chapters 1 `
    --migrate-sources "bato.to,mangabuddy,weeb central,mangapark" `
+   --migrate-title-threshold 0.7 `
    --migrate-preferred-only `
    --best-source `
    --best-source-canonical `
@@ -250,6 +253,7 @@ Notes:
 
 - Put your preferred site first (e.g., `bato.to`), fallback second (e.g., `mangabuddy`).
 - Keep `--best-source-canonical` on so split/alt releases are counted together.
+- To avoid wrong matches from certain sources, tune `--migrate-title-threshold` (0..1, default 0.6) or enforce `--migrate-title-strict`.
 - Use `--migrate-remove-if-duplicate` if you want to only remove the zero‑chapter one when a duplicate already exists.
 - --migrate-remove is ON by default in these examples (the script default). Use `--no-migrate-remove` if you prefer to keep the original after adding the alternative (optional).
 - Add `--exclude-sources "comick,hitomi"` if you don’t want those mirrors.
@@ -512,6 +516,7 @@ python import_mangadex_bookmarks_to_suwayomi.py `
 - Chapter progress: `--import-read-chapters`, `--read-chapters-dry-run`, `--read-sync-delay`, `--max-read-requests-per-minute`
 - Lists: `--import-lists`, `--list-lists`, `--lists-category-map`, `--lists-ignore`, `--debug-lists`
 - Migration/Rehoming (existing library): `--migrate-library`, `--migrate-threshold-chapters`, `--migrate-sources`, `--migrate-remove`, `--migrate-remove-if-duplicate`, `--migrate-filter-title`, `--migrate-max-sources-per-site`, `--migrate-try-second-page`, `--migrate-timeout`, `--best-source`, `--best-source-global`, `--best-source-candidates`, `--best-source-canonical`, `--min-chapters-per-alt`, `--debug-library`
+- Title matching (Migration & Rehoming): `--migrate-title-threshold`, `--migrate-title-strict`
 - Migration filtering: `--migrate-include-categories`, `--migrate-exclude-categories`
 - Prune (no searching): `--prune-zero-duplicates`, `--prune-threshold-chapters`, `--prune-filter-title`
 - Language cleanup: `--prune-nonpreferred-langs`, `--prune-lang-threshold`
@@ -597,6 +602,8 @@ Migration/Rehoming (fix 0- or low-chapter entries already in Suwayomi)
 - --migrate-try-second-page: Also check page 2 (use only if needed; slower)
 - --migrate-timeout N: Give up on a single title after N seconds (keeps run going)
 - --migrate-filter-title "text": Only process titles containing this text (great for testing)
+- --migrate-title-threshold N.N: Only accept candidates whose normalized title similarity meets N.N (0..1, default 0.6)
+- --migrate-title-strict: Require normalized exact/containment matches; disables purely fuzzy matches
 - --migrate-include-categories "A,B" or "1,2": Only migrate items in these categories (names or numeric IDs)
 - --migrate-exclude-categories "A,B" or "1,2": Skip items in these categories (names or numeric IDs)
 - --migrate-remove: After adding a good alternative, delete the original entry
