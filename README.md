@@ -55,6 +55,8 @@ This mirrors the tradition of names like Tachiyomi (立ち読み, “stand and r
   python import_mangadex_bookmarks_to_suwayomi.py --help
   ```
 
+See the full user manual in `USER_MANUAL.md` for step-by-step guides and copy/paste command examples.
+
 ---
 
 ## Tabs Overview

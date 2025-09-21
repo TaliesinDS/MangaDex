@@ -1,6 +1,8 @@
-# MangaDex → Suwayomi Import Tool (Beginner Friendly Guide)
+# Seiyomi — MangaDex → Suwayomi Import & Library Tools (Beginner Friendly Guide)
 
 This guide shows you how to move ("import") your MangaDex followed manga, reading statuses, and read chapter progress into a Suwayomi (Tachidesk) server **even if you have never used the command line before**.
+
+For a feature overview and quick-start summary, see the README in this repository.
 
 ---
 
@@ -268,6 +270,8 @@ Basic dry run:
 python import_mangadex_bookmarks_to_suwayomi.py `
    --base-url http://127.0.0.1:4567 `
    --migrate-library `
+   --dry-run
+```
 
 ## 5.0 Graphical Control Panel (optional)
 
@@ -282,10 +286,10 @@ python .\gui_launcher_tk.py
 - Standalone EXE (no Python required):
 
 ```powershell
-.# Build once (produces EXEs in .\dist)
- .\build_exe.ps1 -Clean
- # Launch the GUI
- .\dist\MangaDex_Suwayomi_ControlPanel.exe
+# Build once (produces EXEs in .\dist)
+.\build_exe.ps1 -Clean
+# Launch the GUI
+.\dist\MangaDex_Suwayomi_ControlPanel.exe
 ```
 
 Notes:
