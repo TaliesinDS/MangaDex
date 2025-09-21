@@ -33,8 +33,8 @@ Notes about connections/authentication:
 
 | Item | Why You Need It | How to Get It |
 |------|-----------------|---------------|
-| Windows PC | Runs the tool | You already have it |
-| Python (version 3.11 or newer recommended) | Runs the script | [Download Python](https://www.python.org/downloads/) (check "Add python.exe to PATH" during install) |
+| Windows 10/11 (official) or macOS/Linux with Python | Runs the tool/GUI | Windows EXE available; on macOS/Linux run with Python 3.11+ and Tkinter |
+| Python (version 3.11 or newer recommended) | Runs the script/GUI | [Download Python](https://www.python.org/downloads/) (check "Add python.exe to PATH" during install) |
 | Suwayomi (Tachidesk) server running | Destination library | Start your server (default often `http://localhost:4567`) |
 | MangaDex account credentials | To fetch your follows & read markers | Use your normal username and password |
 | Categories in Suwayomi (optional) | For mapping statuses | Create them in Suwayomi UI first |
@@ -43,7 +43,7 @@ Notes about connections/authentication:
 
 1. Press the Windows key.
 2. Type: `cmd` and press Enter.
-3. In the black window type: `python --version` and press Enter.
+3. In the black window type: `python --version` and press Enter. (On macOS/Linux, use Terminal.)
    - If you see something like: `Python 3.12.0` you’re good.
    - If you get an error, install Python (make sure to tick **Add to PATH** during installation).
 
@@ -58,7 +58,7 @@ Notes about connections/authentication:
 
 ## 4. Quick Start (Easiest Path)
 
-1. Double‑click `run_importer.bat`.
+1. Double‑click `run_importer.bat` (on Windows). On macOS/Linux, see the Python command examples below.
 2. When asked for the **Suwayomi base URL**, type: `http://localhost:4567` (change if yours differs) and press Enter.
 3. For **Fetch all MangaDex follows?** press Enter to accept `Y`.
 4. Enter your **MangaDex username**.
@@ -263,6 +263,33 @@ Notes:
 - Only migrate specific categories: add `--migrate-include-categories "Reading,On Hold"` or by id `--migrate-include-categories "5,7"`. To skip categories instead use `--migrate-exclude-categories`.
 - Favor likely-original scanlator sources by boosting their score: `--prefer-sources "asura,flame,genz,utoons" --prefer-boost 3`.
 - Keep both when needed: add `--migrate-keep-both` with `--best-source-global` to save both quality and coverage variants.
+
+### Title Matching (How it chooses the right result)
+
+Some source sites return popular/new lists even when you search a specific title. Seiyomi filters candidates before picking a source using normalized title similarity:
+
+- `--migrate-title-threshold <0..1>` Require a minimum similarity (default `0.6`). Higher = stricter.
+- `--migrate-title-strict` Only accept normalized exact/containment matches (disables fuzzy-only matches).
+
+Quick examples:
+
+```powershell
+# Stricter than default (fewer false positives)
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --migrate-library `
+   --migrate-title-threshold 0.75 `
+   --dry-run
+```
+
+```powershell
+# Near-exact matches only (best when a source is noisy)
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --migrate-library `
+   --migrate-title-strict `
+   --dry-run
+```
 
 Basic dry run:
 

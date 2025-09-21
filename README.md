@@ -17,6 +17,13 @@ It includes a Tkinter-based GUI with live command preview and presets, plus a di
 
 ---
 
+## System Requirements
+
+- Windows 10/11 (official support; packaged EXE available)
+- Suwayomi server reachable (e.g., `http://127.0.0.1:4567`)
+- Python 3.11+ if running scripts directly
+- Optional: PowerShell 7 (`pwsh`) for opening an external terminal from the GUI (quiet mode doesn’t require it)
+
 ## Why “Seiyomi”?
 
 - Name: Seiyomi (整読み) combines 整 (sei, “organize/order”) with 読み (yomi, “reading”).

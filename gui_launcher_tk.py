@@ -26,6 +26,12 @@ except Exception:
 SCRIPT_NAME = "import_mangadex_bookmarks_to_suwayomi.py"
 PACKAGED_CLI = "import_mangadex_bookmarks_to_suwayomi.exe"
 
+# App metadata (update as needed for releases)
+APP_VERSION = "dev"
+REPO_URL = "https://github.com/TaliesinDS/Seiyomi"
+APP_AUTHOR = "Arthur Kortekaas (TaliesinDS)"
+APP_LICENSE = "MIT"
+
 # --- UI helpers: simple tooltip ---
 class _Tooltip:
     def __init__(self, widget, text: str):
@@ -298,25 +304,46 @@ def build_args(v: dict) -> List[str]:
     return positional + args
 
 
-def launch_command(cmd_list: List[str], save_log: bool, log_path: Optional[str]):
+def launch_command(cmd_list: List[str], save_log: bool, log_path: Optional[str], external_terminal: bool):
     pwsh = _pwsh_binary()
     cli_exe = find_cli_executable()
+    CREATE_NO_WINDOW = 0x08000000 if os.name == 'nt' else 0
+
+    if external_terminal:
+        # Visible terminal with live output
+        if cli_exe is not None:
+            full_cmd = [str(cli_exe), *cmd_list]
+            ps_cmd = ' '.join([shlex.quote(p) for p in full_cmd])
+            if save_log and log_path:
+                ps_cmd = ps_cmd + f" | Tee-Object -FilePath {shlex.quote(log_path)}"
+            subprocess.Popen([pwsh, "-NoExit", "-Command", ps_cmd])
+            return
+        py = python_executable()
+        script = str(Path(__file__).parent / SCRIPT_NAME)
+        full_cmd = [py, script, *cmd_list]
+        ps_cmd = ' '.join([shlex.quote(p) for p in full_cmd])
+        if save_log and log_path:
+            ps_cmd = ps_cmd + f" | Tee-Object -FilePath {shlex.quote(log_path)}"
+        subprocess.Popen([pwsh, "-NoExit", "-Command", ps_cmd])
+        return
+
+    # Quiet mode: no external terminal; support logging via hidden pipeline
     if cli_exe is not None:
         full_cmd = [str(cli_exe), *cmd_list]
         if save_log and log_path:
             ps_cmd = ' '.join([shlex.quote(p) for p in full_cmd]) + f" | Tee-Object -FilePath {shlex.quote(log_path)}"
-            subprocess.Popen([pwsh, "-NoExit", "-Command", ps_cmd])
+            subprocess.Popen([pwsh, "-Command", ps_cmd], creationflags=CREATE_NO_WINDOW)
         else:
-            subprocess.Popen(full_cmd)
+            subprocess.Popen(full_cmd, creationflags=CREATE_NO_WINDOW)
         return
     py = python_executable()
     script = str(Path(__file__).parent / SCRIPT_NAME)
     full_cmd = [py, script, *cmd_list]
     if save_log and log_path:
         ps_cmd = ' '.join([shlex.quote(p) for p in full_cmd]) + f" | Tee-Object -FilePath {shlex.quote(log_path)}"
-        subprocess.Popen([pwsh, "-NoExit", "-Command", ps_cmd])
+        subprocess.Popen([pwsh, "-Command", ps_cmd], creationflags=CREATE_NO_WINDOW)
     else:
-        subprocess.Popen([pwsh, "-NoExit", "-Command", ' '.join([shlex.quote(p) for p in full_cmd])])
+        subprocess.Popen(full_cmd, creationflags=CREATE_NO_WINDOW)
 
 
 def apply_preset(v: dict, name: str):
@@ -404,19 +431,19 @@ def main():
                 pass
         messagebox.showinfo('Manual not found', 'USER_MANUAL.md could not be opened. Please open it from the repository root.')
 
-    def show_manual_popup():
-        manual = Path(__file__).parent / 'USER_MANUAL.md'
-        if not manual.exists():
-            messagebox.showinfo('Manual not found', 'USER_MANUAL.md could not be found in the repository root.')
+    # Shared Markdown popup viewer (used for manual and README)
+    def show_markdown_popup(title: str, file_path: Path, open_external_cb=None):
+        if not file_path.exists():
+            messagebox.showinfo(f'{title} not found', f'{file_path.name} could not be found in the repository root.')
             return
         try:
-            content = manual.read_text(encoding='utf-8', errors='ignore')
+            content = file_path.read_text(encoding='utf-8', errors='ignore')
         except Exception as e:
-            messagebox.showerror('Error', f'Failed to read manual: {e}')
+            messagebox.showerror('Error', f'Failed to read {file_path.name}: {e}')
             return
 
         top = tk.Toplevel(root)
-        top.title('User Manual')
+        top.title(title)
         top.geometry('900x700')
         try:
             _geo_cfg = _load_config()
@@ -425,14 +452,13 @@ def main():
         except Exception:
             pass
 
-        # Toolbar
         bar = ttk.Frame(top)
         bar.pack(fill='x')
 
-        # Preferences
         cfg = _load_config()
         default_sz = str(cfg.get('manual_font_size', 13))
-        default_render = bool(cfg.get('manual_render_md', bool(_HAS_HTML and _HAS_MD)))
+        # Default to rendered markdown when libs are available
+        default_render = True if (_HAS_HTML and _HAS_MD) else False
         default_dark = bool(cfg.get('manual_dark_mode', False))
 
         render_md = tk.BooleanVar(top, value=default_render)
@@ -455,14 +481,13 @@ def main():
         ttk.Button(bar, text='Prev', command=lambda: _find_prev()).pack(side='left', padx=(0, 2))
         ttk.Button(bar, text='Next', command=lambda: _find_next()).pack(side='left', padx=(0, 6))
 
-        ttk.Button(bar, text='Open Externally', command=open_manual).pack(side='right', padx=4, pady=4)
+        if open_external_cb is not None:
+            ttk.Button(bar, text='Open Externally', command=open_external_cb).pack(side='right', padx=4, pady=4)
         ttk.Button(bar, text='Close', command=top.destroy).pack(side='right', padx=4, pady=4)
 
-        # Content container
         content_frame = ttk.Frame(top)
         content_frame.pack(fill='both', expand=True)
 
-        # State for viewer/text
         state = {'mode': 'text', 'widget': None, 'tw': None}
         text_font = tkfont.Font(family='Segoe UI', size=int(size_var.get()))
 
@@ -478,13 +503,11 @@ def main():
                 pass
 
         def _render_html():
-            # Render markdown to HTML and display (selection supported via HTMLScrolledText)
             html_body = _md.markdown(content, extensions=['extra', 'fenced_code', 'sane_lists', 'tables', 'toc'])
             try:
                 sz = max(8, min(36, int(size_var.get())))
             except Exception:
                 sz = 13
-            # Avoid <style> blocks (unsupported by tkhtmlview); use simple wrapper div
             if dark_var.get():
                 html = (
                     f"<div style=\"font-family:Segoe UI, Arial, sans-serif; font-size:{sz}px; line-height:1.6; padding:10px; color:#e6edf3; background-color:#0f1115;\">{html_body}</div>"
@@ -562,7 +585,6 @@ def main():
             _save_config(cfg)
 
         def _apply_size():
-            # Adjust size for current mode
             try:
                 new_size = int(size_var.get())
             except Exception:
@@ -592,7 +614,6 @@ def main():
             top.destroy()
         top.protocol('WM_DELETE_WINDOW', _on_close)
 
-        # Initial render
         if render_md.get():
             try:
                 _render_html()
@@ -601,7 +622,6 @@ def main():
         else:
             _render_text()
 
-        # -------- Find / Search implementation --------
         def _clear_find_tags():
             tw = state.get('tw')
             if not isinstance(tw, tk.Text):
@@ -652,7 +672,6 @@ def main():
                     idx = tw.search(pattern, '1.0', 'end', nocase=(not case_var.get()))
                 found_idx = idx
             else:
-                # Backward search emulation
                 last_idx = None
                 start = '1.0'
                 while True:
@@ -683,12 +702,17 @@ def main():
                 return
             _goto_match(-1)
 
-        # Bind find entry updates
         try:
             find_entry.bind('<Return>', lambda e: (_rebuild_find(), _find_next()))
         except Exception:
             pass
         _rebuild_find()
+
+    def show_manual_popup():
+        show_markdown_popup('User Manual', Path(__file__).parent / 'USER_MANUAL.md', open_external_cb=open_manual)
+
+    def show_readme_popup():
+        show_markdown_popup('README', Path(__file__).parent / 'README.md', open_external_cb=lambda: (os.startfile(str(Path(__file__).parent / 'README.md')) if os.name == 'nt' else webbrowser.open((Path(__file__).parent / 'README.md').as_uri())))
 
     # GUI values
     vals = {
@@ -696,7 +720,8 @@ def main():
         'base_url': tk.StringVar(value='http://127.0.0.1:4567'),
         'dry_run': tk.BooleanVar(value=True),
         'debug': tk.BooleanVar(value=False),
-        'save_log': tk.BooleanVar(value=False),
+    'save_log': tk.BooleanVar(value=False),
+    'external_terminal': tk.BooleanVar(value=False),
         'log_path': tk.StringVar(value=''),
         'preset': tk.StringVar(value=''),
         # Input file (optional)
@@ -1176,13 +1201,18 @@ def main():
         env_txt = f"Python: {sys.version.split()[0]}"
     ab_env = ttk.Label(about, text=env_txt, foreground='#444')
     ab_env.grid(row=ar, column=0, columnspan=3, sticky='w', padx=8, pady=(6, 10)); ar+=1
+    # Metadata (version / license / author)
+    ab_meta = ttk.Label(about, text=f"Version: {APP_VERSION}    |    License: {APP_LICENSE}")
+    ab_meta.grid(row=ar, column=0, columnspan=3, sticky='w', padx=8); ar+=1
+    ab_author = ttk.Label(about, text=f"Author: {APP_AUTHOR}")
+    ab_author.grid(row=ar, column=0, columnspan=3, sticky='w', padx=8, pady=(0, 8)); ar+=1
     # Links
     def _open_readme():
-        p = Path(__file__).parent / 'README.md'
-        if p.exists():
-            os.startfile(str(p)) if os.name == 'nt' else webbrowser.open(p.as_uri())
+        gui_readme = Path(__file__).parent / 'GUI_README.md'
+        if gui_readme.exists():
+            show_markdown_popup('GUI README', gui_readme, open_external_cb=lambda: (os.startfile(str(gui_readme)) if os.name == 'nt' else webbrowser.open(gui_readme.as_uri())))
         else:
-            messagebox.showinfo('Not found', 'README.md not found next to this script.')
+            show_readme_popup()
     def _open_manual():
         show_manual_popup()
     def _open_folder():
@@ -1191,6 +1221,20 @@ def main():
             os.startfile(folder)
         except Exception:
             webbrowser.open(Path(folder).as_uri())
+    def _open_repo():
+        try:
+            webbrowser.open(REPO_URL)
+        except Exception as e:
+            messagebox.showerror('Failed to open', str(e))
+    def _open_license():
+        p = Path(__file__).parent / 'LICENSE'
+        if p.exists():
+            try:
+                os.startfile(str(p)) if os.name == 'nt' else webbrowser.open(p.as_uri())
+            except Exception:
+                webbrowser.open(p.as_uri())
+        else:
+            messagebox.showinfo('Not found', 'LICENSE file not found in project folder.')
     def _copy_env():
         try:
             about.clipboard_clear()
@@ -1198,11 +1242,13 @@ def main():
             messagebox.showinfo('Copied', 'Environment info copied to clipboard.')
         except Exception:
             pass
-    ttk.Button(about, text='Open README', command=_open_readme).grid(row=ar, column=0, sticky='w', padx=8)
-    ttk.Button(about, text='Open Manual', command=_open_manual).grid(row=ar, column=1, sticky='w')
-    ttk.Button(about, text='Open Project Folder', command=_open_folder).grid(row=ar, column=2, sticky='w')
+    ttk.Button(about, text='Open GUI README', command=_open_readme).grid(row=ar, column=0, sticky='w', padx=8)
+    ttk.Button(about, text='Open Repository', command=_open_repo).grid(row=ar, column=1, sticky='w')
+    ttk.Button(about, text='Open Manual', command=_open_manual).grid(row=ar, column=2, sticky='w')
     ar+=1
-    ttk.Button(about, text='Copy Environment Info', command=_copy_env).grid(row=ar, column=0, sticky='w', padx=8, pady=(6, 12))
+    ttk.Button(about, text='Open Project Folder', command=_open_folder).grid(row=ar, column=0, sticky='w', padx=8)
+    ttk.Button(about, text='Open LICENSE', command=_open_license).grid(row=ar, column=1, sticky='w')
+    ttk.Button(about, text='Copy Environment Info', command=_copy_env).grid(row=ar, column=2, sticky='w', pady=(6, 12))
 
     # Enforce tab order: Migrate, Prune, MangaDex Import, Suwayomi Database, Settings, About
     try:
@@ -1239,7 +1285,7 @@ def main():
             return
         args = build_args(vals)
         try:
-            launch_command(args, vals['save_log'].get(), vals['log_path'].get().strip() or None)
+            launch_command(args, vals['save_log'].get(), vals['log_path'].get().strip() or None, vals['external_terminal'].get())
         except Exception as e:
             messagebox.showerror('Failed to launch', str(e))
 
@@ -1276,6 +1322,8 @@ def main():
     attach_tip(en_log, 'Path to save the run log (only used when Save log is checked).')
     bt_log = ttk.Button(btn_frame, text='Browse...', command=lambda: vals['log_path'].set(filedialog.asksaveasfilename(defaultextension='.log', filetypes=[('Log/Text','*.log;*.txt')]))); bt_log.pack(side='left', padx=(4, 12))
     attach_tip(bt_log, 'Choose a log file path.')
+    cb_ext = ttk.Checkbutton(btn_frame, text='Open in external terminal', variable=vals['external_terminal']); cb_ext.pack(side='left')
+    attach_tip(cb_ext, 'When enabled, run the command in a visible PowerShell window. Otherwise, run quietly (hidden).')
  
     # Keep Exit on the far right
     bt_exit = ttk.Button(btn_frame, text='Exit', command=root.destroy); bt_exit.pack(side='right', padx=(6, 0))
@@ -1290,21 +1338,36 @@ def main():
         cli_exe = find_cli_executable()
         pwsh = _pwsh_binary()
         cmd_str = ''
+        external = vals['external_terminal'].get()
         if cli_exe is not None:
             full_cmd = [str(cli_exe), *args]
-            if vals['save_log'].get() and vals['log_path'].get().strip():
-                ps_cmd = ' '.join([shlex.quote(p) for p in full_cmd]) + f" | Tee-Object -FilePath {shlex.quote(vals['log_path'].get().strip())}"
-                cmd_str = ' '.join([pwsh, '-NoExit', '-Command', ps_cmd])
+            if external:
+                if vals['save_log'].get() and vals['log_path'].get().strip():
+                    ps_cmd = ' '.join([shlex.quote(p) for p in full_cmd]) + f" | Tee-Object -FilePath {shlex.quote(vals['log_path'].get().strip())}"
+                    cmd_str = ' '.join([pwsh, '-NoExit', '-Command', ps_cmd])
+                else:
+                    cmd_str = ' '.join([pwsh, '-NoExit', '-Command', ' '.join([shlex.quote(p) for p in full_cmd])])
             else:
-                cmd_str = ' '.join([shlex.quote(p) for p in full_cmd])
+                if vals['save_log'].get() and vals['log_path'].get().strip():
+                    ps_cmd = ' '.join([shlex.quote(p) for p in full_cmd]) + f" | Tee-Object -FilePath {shlex.quote(vals['log_path'].get().strip())}"
+                    cmd_str = ' '.join([pwsh, '-Command', ps_cmd])
+                else:
+                    cmd_str = ' '.join([shlex.quote(p) for p in full_cmd])
         else:
             py = python_executable()
             script = str(Path(__file__).parent / SCRIPT_NAME)
             full_cmd = [py, script, *args]
             ps_cmd = ' '.join([shlex.quote(p) for p in full_cmd])
-            if vals['save_log'].get() and vals['log_path'].get().strip():
-                ps_cmd = ps_cmd + f" | Tee-Object -FilePath {shlex.quote(vals['log_path'].get().strip())}"
-            cmd_str = ' '.join([pwsh, '-NoExit', '-Command', ps_cmd])
+            if external:
+                if vals['save_log'].get() and vals['log_path'].get().strip():
+                    ps_cmd = ps_cmd + f" | Tee-Object -FilePath {shlex.quote(vals['log_path'].get().strip())}"
+                cmd_str = ' '.join([pwsh, '-NoExit', '-Command', ps_cmd])
+            else:
+                if vals['save_log'].get() and vals['log_path'].get().strip():
+                    ps_cmd = ps_cmd + f" | Tee-Object -FilePath {shlex.quote(vals['log_path'].get().strip())}"
+                    cmd_str = ' '.join([pwsh, '-Command', ps_cmd])
+                else:
+                    cmd_str = ' '.join([shlex.quote(p) for p in full_cmd])
 
         preview_txt.configure(state='normal')
         preview_txt.delete('1.0', 'end')
