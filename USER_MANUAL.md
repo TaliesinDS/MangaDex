@@ -38,6 +38,65 @@ Notes about connections/authentication:
 
 
 ## 2. Prerequisites (What You Need First)
+## 3. Chapter Read Sync (MangaDex → Suwayomi)
+
+This tool can import your MangaDex read progress into Suwayomi in two ways:
+
+1) Direct UUID match (recommended when the entry is from the MangaDex source)
+- `--import-read-chapters`: fetch the list of read chapter UUIDs from MangaDex and mark the same UUIDs as read in Suwayomi.
+- Works only when the Suwayomi entry is the MangaDex source (UUIDs exist on that entry).
+
+2) Cross‑source by chapter number (for migrated titles)
+- `--read-sync-number-fallback`: when UUIDs don’t match (e.g., title migrated to a different source), match by chapter number instead.
+- `--read-sync-across-sources`: apply the read marks to same‑title entries under other sources (normalized title match).
+- `--read-sync-only-if-ahead`: only mark if your MangaDex progress is ahead of the current read position of the target entry.
+
+Supporting options
+- `--read-sync-delay <sec>`: wait after adding a manga before syncing reads to give Suwayomi time to fetch chapters.
+- `--max-read-requests-per-minute <n>`: rate limit chapter mark calls.
+- `--missing-report <path.csv>`: write a CSV listing titles with missing read chapters or where chapters weren’t loaded yet (recorded as `unknown`). The file is created immediately with a header and updated live as the run progresses.
+
+Fractional chapter rules (canonical counting)
+- `.1–.4` are canonical (count toward progress and inclusion).
+- `.5` is canonical only if other split parts exist for that base chapter (.1–.4 or .6+); isolated `.5` is treated as extra and excluded from progress.
+- `.6+` are canonical when present.
+- Title hints like “extra”, “omake”, “special”, “side story” cause exclusion even when the number looks canonical.
+
+Examples
+
+Import reads on MangaDex source entries only (UUID match):
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --from-follows `
+   --md-username USER `
+   --md-password PASS `
+   --import-read-chapters `
+   --read-sync-delay 2 `
+   --max-read-requests-per-minute 240
+```
+
+Import and apply by number across sources (only when ahead), write live missing report:
+```powershell
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --from-follows `
+   --md-username USER `
+   --md-password PASS `
+   --import-read-chapters `
+   --read-sync-number-fallback `
+   --read-sync-across-sources `
+   --read-sync-only-if-ahead `
+   --read-sync-delay 2 `
+   --max-read-requests-per-minute 240 `
+   --missing-report .\reports\md_missing_reads.csv
+```
+
+Troubleshooting
+- “WARN no chapters loaded yet …”: the tool records `unknown` to the CSV; raise `--read-sync-delay` (e.g., 3–5 s) and rerun or open the title in the Suwayomi UI to force chapter fetch.
+- Missing rows don’t appear during the run: ensure the CSV isn’t open in Excel (file lock). Use `Get-Content .\reports\md_missing_reads.csv -Wait` to tail the file.
+- Cross‑source matching is by normalized title; if a title was renamed substantially, consider syncing UUIDs on the MangaDex entry once to establish progress.
+
 
 | Item | Why You Need It | How to Get It |
 |------|-----------------|---------------|

@@ -201,6 +201,14 @@ def build_args(v: dict) -> List[str]:
         args += ["--read-sync-delay", v['read_delay'].get().strip()]
     if v.get('max_read_requests_per_minute') and v['max_read_requests_per_minute'].get().strip() and v['max_read_requests_per_minute'].get().strip() != '300':
         args += ["--max-read-requests-per-minute", v['max_read_requests_per_minute'].get().strip()]
+    if v.get('read_sync_number_fallback') and v['read_sync_number_fallback'].get():
+        args += ["--read-sync-number-fallback"]
+    if v.get('read_sync_across_sources') and v['read_sync_across_sources'].get():
+        args += ["--read-sync-across-sources"]
+    if v.get('read_sync_only_if_ahead') and v['read_sync_only_if_ahead'].get():
+        args += ["--read-sync-only-if-ahead"]
+    if v.get('missing_report') and v['missing_report'].get().strip():
+        args += ["--missing-report", v['missing_report'].get().strip()]
 
     # Category
     if v['category_id'].get().strip():
@@ -376,6 +384,19 @@ def apply_preset(v: dict, name: str):
         v['keep_both_min'].set('1')
         v['remove_original'].set(True)
         v['dry_run'].set(True)
+    elif name == 'Read Sync Across Sources':
+        # Enable MangaDex import with read sync across sources by chapter number
+        v['md_import_enabled'].set(True)
+        v['import_read'].set(True)
+        v['read_chapters_dry_run'].set(False)
+        v['read_delay'].set('2')
+        v['max_read_requests_per_minute'].set('240')
+        v.setdefault('read_sync_number_fallback', tk.BooleanVar(value=True)).set(True)
+        v.setdefault('read_sync_across_sources', tk.BooleanVar(value=True)).set(True)
+        v.setdefault('read_sync_only_if_ahead', tk.BooleanVar(value=True)).set(True)
+        # Pre-fill a default missing-report path if blank
+        if not v.setdefault('missing_report', tk.StringVar(value=str(Path.cwd()/ 'reports' / 'md_missing_reads.csv'))).get().strip():
+            v['missing_report'].set(str(Path.cwd()/ 'reports' / 'md_missing_reads.csv'))
 
 
 # ---- Config helpers ----
@@ -929,17 +950,35 @@ def main():
     r += 1
 
     # Read chapters
-    rc = ttk.LabelFrame(fw, text='Read Chapters')
+    rc = ttk.LabelFrame(fw, text='Chapter Read Sync')
     rc.grid(row=r, column=0, columnspan=4, sticky='nsew', pady=(0,6))
     rr = 0
-    cb_import_read = ttk.Checkbutton(rc, text='Import read chapters', variable=vals['import_read']); cb_import_read.grid(row=rr, column=0, sticky='w')
-    attach_tip(cb_import_read, 'Fetch MangaDex read chapter UUIDs and mark them as read in Suwayomi.')
+    cb_import_read = ttk.Checkbutton(rc, text='Import read chapters (MangaDex → Suwayomi)', variable=vals['import_read']); cb_import_read.grid(row=rr, column=0, sticky='w')
+    attach_tip(cb_import_read, 'Fetch MangaDex read chapter UUIDs and mark them as read in Suwayomi (MangaDex source).')
     cb_rc_dry = ttk.Checkbutton(rc, text='Dry run', variable=vals['read_chapters_dry_run']); cb_rc_dry.grid(row=rr, column=1, sticky='w')
     attach_tip(cb_rc_dry, 'Simulate marking chapters as read without modifying Suwayomi.')
     ttk.Label(rc, text='Delay (s)').grid(row=rr, column=2, sticky='e'); en_rc_delay = ttk.Entry(rc, textvariable=vals['read_delay'], width=8); en_rc_delay.grid(row=rr, column=3, sticky='w'); rr+=1
     attach_tip(en_rc_delay, 'Wait time after adding a manga before syncing read chapters to allow chapters to populate.')
     ttk.Label(rc, text='Max requests/min').grid(row=rr, column=2, sticky='e'); en_rc_rpm = ttk.Entry(rc, textvariable=vals['max_read_requests_per_minute'], width=8); en_rc_rpm.grid(row=rr, column=3, sticky='w'); rr+=1
     attach_tip(en_rc_rpm, 'Throttle for chapter read-mark requests. Default 300.')
+
+    # Cross-source sync options
+    cb_num_fallback = ttk.Checkbutton(rc, text='Number fallback', variable=vals.setdefault('read_sync_number_fallback', tk.BooleanVar(value=False)))
+    cb_num_fallback.grid(row=rr, column=0, sticky='w')
+    attach_tip(cb_num_fallback, 'When UUIDs don\'t match, mark chapters by chapter number (for migrated entries).')
+    cb_across = ttk.Checkbutton(rc, text='Across sources', variable=vals.setdefault('read_sync_across_sources', tk.BooleanVar(value=False)))
+    cb_across.grid(row=rr, column=1, sticky='w')
+    attach_tip(cb_across, 'Also apply read marks to same-title entries under other sources (by chapter number).')
+    cb_only_ahead = ttk.Checkbutton(rc, text='Only if ahead', variable=vals.setdefault('read_sync_only_if_ahead', tk.BooleanVar(value=True)))
+    cb_only_ahead.grid(row=rr, column=2, sticky='w'); rr+=1
+    attach_tip(cb_only_ahead, 'Only apply read marks when MangaDex progress is ahead of the target entry.')
+
+    ttk.Label(rc, text='Missing report (CSV)').grid(row=rr, column=0, sticky='w')
+    en_miss = ttk.Entry(rc, textvariable=vals.setdefault('missing_report', tk.StringVar(value=str(Path.cwd()/ 'reports' / 'md_missing_reads.csv'))), width=50); en_miss.grid(row=rr, column=1, columnspan=2, sticky='we')
+    attach_tip(en_miss, 'Write a CSV of titles where read sync is missing chapters or chapters not yet loaded (updated live).')
+    bt_miss = ttk.Button(rc, text='Browse...', command=lambda: vals['missing_report'].set(filedialog.asksaveasfilename(defaultextension='.csv', filetypes=[('CSV','*.csv')])))
+    bt_miss.grid(row=rr, column=3, sticky='w'); rr+=1
+    attach_tip(bt_miss, 'Choose where to save the missing-reads report.')
     r += 1
  
     # Target category
@@ -1095,7 +1134,7 @@ def main():
     cb_dbg_output = ttk.Checkbutton(ms, text='Debug output', variable=vals['debug']); cb_dbg_output.grid(row=r, column=0, sticky='w'); r+=1
     attach_tip(cb_dbg_output, 'Enable verbose logging in the console for troubleshooting.')
     ttk.Label(ms, text='Preset').grid(row=r, column=0, sticky='w')
-    preset_cb = ttk.Combobox(ms, textvariable=vals['preset'], values=['Prefer English Migration','Cleanup Non-English','Keep Both (Quality+Coverage)'], state='readonly', width=35)
+    preset_cb = ttk.Combobox(ms, textvariable=vals['preset'], values=['Prefer English Migration','Cleanup Non-English','Keep Both (Quality+Coverage)','Read Sync Across Sources'], state='readonly', width=35)
     preset_cb.grid(row=r, column=1, sticky='w')
     attach_tip(preset_cb, 'Apply a curated set of options for common workflows.')
     def _apply():

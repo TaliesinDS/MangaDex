@@ -8,6 +8,9 @@ import getpass
 import time
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple, Dict, Any, Set
+import csv
+import time
+import math
 
 try:
     import pandas as pd  # Optional, only used for xlsx/csv convenience
@@ -18,6 +21,9 @@ import requests
 
 # MangaDex API base (public)
 MANGADEX_API = "https://api.mangadex.org"
+
+# Global chapter sync config (set in main from CLI flags)
+CHAPTER_SYNC_CONF: Dict[str, Any] = {}
 
 # Utility early so helper functions can use it
 def truncate_text(t: str, limit: int = 200) -> str:
@@ -1469,6 +1475,15 @@ def sync_read_chapters_for_manga(
     if not su_chapters:
         if show_progress:
             print(f"{prefix}WARN no chapters loaded yet for {manga_md_id}")
+        # Live report: record unknown when chapters not loaded yet
+        try:
+            if MISSING_REPORT_PATH:
+                title = fetch_title_from_mangadex(manga_md_id) or ""
+                with MISSING_REPORT_PATH.open('a', newline='', encoding='utf-8') as f:
+                    w = csv.writer(f)
+                    w.writerow([title, manga_md_id, 0, 0, 'unknown'])
+        except Exception:
+            pass
         return
     uuid_to_internal: Dict[str, int] = {}
     for ch in su_chapters:
@@ -1502,6 +1517,15 @@ def sync_read_chapters_for_manga(
             marked += 1
     if show_progress:
         print(f"{prefix}Chapters sync {manga_md_id}: markable={len(md_read)} marked={marked} missing={missing}")
+    # Live report: write missing rows immediately when missing>0
+    try:
+        if MISSING_REPORT_PATH and missing > 0:
+            title = fetch_title_from_mangadex(manga_md_id) or ""
+            with MISSING_REPORT_PATH.open('a', newline='', encoding='utf-8') as f:
+                w = csv.writer(f)
+                w.writerow([title, manga_md_id, len(md_read), marked, missing])
+    except Exception:
+        pass
 
 
 # --- MangaDex custom lists helpers ---
@@ -1574,6 +1598,211 @@ def fetch_manga_ids_in_list(session_token: str, list_id: str, debug: bool = Fals
     return ids
 
 
+# --- Cross-source read sync helpers (by chapter number) ---
+def _norm_title_for_match(title: str) -> str:
+    return " ".join(_normalize_title_tokens(title or ""))
+
+def _parse_chapter_number_from_item(item: Dict[str, Any]) -> Optional[float]:
+    # Try structured numeric fields first
+    for k in ("chapterNumber", "chapter", "number"):
+        v = item.get(k)
+        if isinstance(v, (int, float)):
+            return float(v)
+        if isinstance(v, str):
+            m = re.search(r"(\d+(?:\.\d+)?)", v)
+            if m:
+                try:
+                    return float(m.group(1))
+                except Exception:
+                    pass
+    # Fall back to text fields
+    for k in ("name", "title"):
+        v = item.get(k)
+        if isinstance(v, str):
+            m = re.search(r"(\d+(?:\.\d+)?)", v)
+            if m:
+                try:
+                    return float(m.group(1))
+                except Exception:
+                    pass
+    return None
+
+def _build_fraction_map(numbers: List[float]) -> Dict[int, Set[int]]:
+    m: Dict[int, Set[int]] = {}
+    for n in numbers:
+        b = int(math.floor(n + 1e-9))
+        f = int(round((n - b) * 10)) if n - b > 0 else 0
+        m.setdefault(b, set()).add(f)
+    return m
+
+def _is_fraction_canonical(n: float, frac_map: Dict[int, Set[int]]) -> bool:
+    b = int(math.floor(n + 1e-9))
+    f = int(round((n - b) * 10)) if n - b > 0 else 0
+    fr = frac_map.get(b, set())
+    if f == 0:
+        return True
+    if 1 <= f <= 4:
+        return True
+    if f == 5:
+        # include .5 if any other split exists (1-4 or >=6)
+        return any(x in fr for x in (1, 2, 3, 4)) or any(x >= 6 for x in fr)
+    # .6+ present => canonical segment
+    return True
+
+def _compute_entry_progress_by_number(client: SuwayomiClient, manga_internal_id: int) -> float:
+    items = fetch_suwayomi_chapters(client, manga_internal_id) or []
+    nums = [n for n in (_parse_chapter_number_from_item(it) for it in items) if n is not None]
+    frac_map = _build_fraction_map(nums)
+    read_nums: List[float] = []
+    for it in items:
+        if not (it.get("read") or it.get("isRead")):
+            continue
+        n = _parse_chapter_number_from_item(it)
+        if n is None:
+            continue
+        if _is_fraction_canonical(n, frac_map):
+            read_nums.append(n)
+    return max(read_nums) if read_nums else 0.0
+
+def _mark_entry_up_to_number(client: SuwayomiClient, manga_internal_id: int, up_to: float, rpm: int, dry_run: bool = False) -> None:
+    items = fetch_suwayomi_chapters(client, manga_internal_id) or []
+    nums = [n for n in (_parse_chapter_number_from_item(it) for it in items) if n is not None]
+    frac_map = _build_fraction_map(nums)
+    min_interval = 60.0 / rpm if rpm > 0 else 0
+    last = 0.0
+    for it in items:
+        n = _parse_chapter_number_from_item(it)
+        if n is None:
+            continue
+        if not _is_fraction_canonical(n, frac_map):
+            continue
+        if n <= up_to and not (it.get("read") or it.get("isRead")):
+            cid = it.get("id") or it.get("chapterId") or it.get("_id")
+            if isinstance(cid, str) and cid.isdigit():
+                cid = int(cid)
+            if not isinstance(cid, int):
+                continue
+            if dry_run:
+                print(f"[DRY] Mark read by number <= {up_to}: chapter {n} (id={cid})")
+            else:
+                if min_interval:
+                    now = time.time()
+                    if last and now - last < min_interval:
+                        time.sleep(min_interval - (now - last))
+                    last = time.time()
+                try:
+                    mark_chapter_read(client, cid)
+                except Exception:
+                    pass
+
+def _compute_md_progress_by_numbers(session_token: str, manga_md_id: str) -> Optional[float]:
+    uuids = fetch_mangadex_read_chapters(session_token, manga_md_id)
+    if not uuids:
+        return None
+    nums: List[float] = []
+    for u in uuids:
+        try:
+            r = requests.get(f"{MANGADEX_API}/chapter/{u}", timeout=12)
+            if r.status_code != 200:
+                continue
+            ch = (r.json() or {}).get("data", {}).get("attributes", {})
+            s = str(ch.get("chapter") or "").strip()
+            if not s:
+                continue
+            m = re.search(r"(\d+(?:\.\d+)?)", s)
+            if not m:
+                continue
+            nums.append(float(m.group(1)))
+        except Exception:
+            continue
+    if not nums:
+        return None
+    frac_map = _build_fraction_map(nums)
+    canon = [n for n in nums if _is_fraction_canonical(n, frac_map)]
+    return max(canon) if canon else None
+
+def sync_cross_source_read_for_md(client: SuwayomiClient, manga_md_id: str, session_token: str, rpm: int, dry_run: bool = False, only_if_ahead: bool = False) -> None:
+    # Resolve title from MangaDex to find same-title entries
+    title = fetch_title_from_mangadex(manga_md_id) or ""
+    if not title:
+        return
+    norm = _norm_title_for_match(title)
+    md_max = _compute_md_progress_by_numbers(session_token, manga_md_id)
+    if md_max is None:
+        return
+    lib = client.get_library_graphql() or client.get_library() or []
+    for it in lib:
+        mid = it.get("id") or (it.get("manga") or {}).get("id") or it.get("mangaId")
+        t = it.get("title") or it.get("name") or ((it.get("manga") or {}).get("title") or (it.get("manga") or {}).get("name"))
+        if not (mid and t):
+            continue
+        try:
+            mid_int = int(mid)
+        except Exception:
+            continue
+        if _norm_title_for_match(str(t)) != norm:
+            continue
+        cur = _compute_entry_progress_by_number(client, mid_int)
+        if only_if_ahead and not (md_max > cur):
+            continue
+        _mark_entry_up_to_number(client, mid_int, md_max, rpm, dry_run=dry_run)
+
+def compute_md_missing_stats(client: SuwayomiClient, session_token: str, md_id: str) -> Optional[Dict[str, Any]]:
+    """Compute markable/marked/missing for a MangaDex ID against the MangaDex source entry in Suwayomi.
+    Returns dict with title, md_id, markable, marked, missing; or None if unresolved.
+    """
+    try:
+        title = fetch_title_from_mangadex(md_id) or md_id
+        # Find MangaDex source internal id
+        srcs = client.get_sources()
+        md_source_id = find_mangadex_source_id(srcs)
+        if not md_source_id:
+            return None
+        # Resolve manga internal id in Suwayomi for this MD id
+        internal_id = search_by_mangadex_id(client, md_source_id, md_id)
+        if internal_id is None:
+            # Fallback by title search
+            if title:
+                internal_id = search_by_title(client, md_source_id, title)
+        if internal_id is None:
+            return None
+        # Fetch chapters in Suwayomi and build UUID map
+        su_chapters = fetch_suwayomi_chapters(client, internal_id) or []
+        uuid_to_item: Dict[str, Dict[str, Any]] = {}
+        for it in su_chapters:
+            u = extract_chapter_uuid_from_item(it)
+            if u:
+                uuid_to_item[u] = it
+        if not uuid_to_item:
+            # no chapters loaded yet
+            return {
+                'title': title,
+                'md_id': md_id,
+                'markable': 0,
+                'marked': 0,
+                'missing': 'unknown',
+            }
+        md_read = fetch_mangadex_read_chapters(session_token, md_id) or []
+        markable = 0
+        marked = 0
+        for u in md_read:
+            it = uuid_to_item.get(u)
+            if it is not None:
+                markable += 1
+                if it.get('read') or it.get('isRead'):
+                    marked += 1
+        missing = max(0, len(md_read) - markable)
+        return {
+            'title': title,
+            'md_id': md_id,
+            'markable': markable,
+            'marked': marked,
+            'missing': missing,
+        }
+    except Exception:
+        return None
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(description="Import MangaDex bookmarks / follows into Suwayomi library.")
     p.add_argument("input_file", type=Path, nargs="?", help="Optional path to bookmarks file (txt/csv/xlsx/json/html). Omit when using --from-follows only.")
@@ -1607,6 +1836,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--read-chapters-dry-run", action="store_true", help="Simulate chapter read marking only")
     p.add_argument("--read-sync-delay", type=float, default=0.0, help="Seconds to wait after adding a manga before syncing read chapters (allow chapters to populate)")
     p.add_argument("--max-read-requests-per-minute", type=int, default=300, help="Throttle for chapter read mark requests")
+    p.add_argument("--read-sync-number-fallback", action="store_true", help="When MangaDex UUIDs don't match, mark chapters by chapter number on any same-title source")
+    p.add_argument("--read-sync-only-if-ahead", action="store_true", help="Only apply read marks when MangaDex has progressed further than the target entry")
+    p.add_argument("--read-sync-across-sources", action="store_true", help="Also apply read marks to same-title entries under other sources (by chapter number)")
     p.add_argument("--list-categories", action="store_true", help="List Suwayomi categories (id + name) and exit")
     p.add_argument("--status-map-debug", action="store_true", help="Verbose output for status->category mapping decisions")
     p.add_argument("--assume-missing-status", help="If a manga has no MangaDex status, assume this status (e.g. reading)")
@@ -1662,6 +1894,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--lists-category-map", help="Comma list mapping ListName=categoryId (e.g. Dropped=7,On Hold=5,Plan to Read=8,Completed=9,Reading=4)")
     p.add_argument("--lists-ignore", help="Comma-separated list names to ignore when importing lists (e.g. Reading)")
     p.add_argument("--debug-lists", action="store_true", help="Verbose output for custom lists fetching and mapping decisions")
+    # Reports
+    p.add_argument("--missing-report", type=Path, help="Write a CSV of titles where read-chapter sync found missing chapters (title, md_id, markable, marked, missing)")
 
     # Prune-only mode (hard prune duplicates without searching)
     p.add_argument("--prune-zero-duplicates", action="store_true", help="Remove zero/low-chapter entries when another entry with the same title already exists with >= --prune-threshold-chapters chapters (no searching)")
@@ -1959,6 +2193,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         'dry_run': args.read_chapters_dry_run,
         'delay': args.read_sync_delay,
         'rpm': args.max_read_requests_per_minute,
+        'number_fallback': args.read_sync_number_fallback,
+        'only_if_ahead': args.read_sync_only_if_ahead,
+        'across_sources': args.read_sync_across_sources,
     }
     if args.import_read_chapters and not (args.from_follows and session_token):
         print("--import-read-chapters requires a MangaDex session (use --from-follows login path). Disabling.")
@@ -1973,6 +2210,27 @@ def main(argv: Optional[List[str]] = None) -> int:
         verify_tls=not args.insecure,
         request_timeout=args.request_timeout,
     )
+
+    # If a missing report is requested, ensure the file exists with header now (helps live tailing)
+    pre_open_live_file: Optional[Path] = None
+    if args.missing_report:
+        try:
+            outp = args.missing_report
+            outp.parent.mkdir(parents=True, exist_ok=True)
+            # Create file with header if empty/non-existent
+            if not outp.exists() or outp.stat().st_size == 0:
+                with outp.open('w', newline='', encoding='utf-8') as f:
+                    w = csv.writer(f)
+                    w.writerow(["title", "md_id", "markable", "marked", "missing"])
+            pre_open_live_file = outp
+        except Exception:
+            pre_open_live_file = None
+    # Publish the report path globally for live appends in helpers
+    try:
+        global MISSING_REPORT_PATH
+        MISSING_REPORT_PATH = pre_open_live_file
+    except Exception:
+        pass
 
     if args.list_categories:
         try:
@@ -2625,6 +2883,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"Migrate summary: migrated={migrated} skipped={skipped} failed={failed}")
         return 0 if failed == 0 else 6
 
+    # Collect per-id sync stats for optional report
+    sync_stats: List[Dict[str, Any]] = []
+
     added, failed, failures = import_ids(
         client,
         ids,
@@ -2665,6 +2926,98 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"  {md}: {reason}")
         if len(failures) > 50:
             print(f"  ... and {len(failures) - 50} more")
+
+    # Per-ID reporting and optional cross-source read sync (with optional live report appending)
+    if session_token:
+        try:
+            # Prepare live report writer if requested
+            live_writer = None
+            live_file = None
+            if args.missing_report:
+                outp = args.missing_report
+                try:
+                    outp.parent.mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    pass
+                # open once in append mode; write header if file empty
+                live_file = outp.open('a', newline='', encoding='utf-8')
+                live_writer = csv.writer(live_file)
+                try:
+                    if outp.stat().st_size == 0:
+                        live_writer.writerow(["title", "md_id", "markable", "marked", "missing"])
+                except Exception:
+                    pass
+
+            def _emit(row: Dict[str, Any]):
+                # Only write rows with missing > 0 or unknown
+                m = row.get('missing')
+                is_missing = (isinstance(m, int) and m > 0) or (isinstance(m, str) and m.strip().lower() == 'unknown')
+                if not is_missing:
+                    return
+                sync_stats.append(row)
+                if live_writer is not None:
+                    live_writer.writerow([row.get('title',''), row.get('md_id',''), row.get('markable',''), row.get('marked',''), row.get('missing','')])
+                    try:
+                        live_file.flush()
+                    except Exception:
+                        pass
+
+            for md in ids:
+                if not MD_ID_RE.match(md):
+                    continue
+                # Compute MD vs Suwayomi (MD source) stats first
+                st = compute_md_missing_stats(client, session_token, md)
+                if st:
+                    _emit(st)
+                # Cross-source sync by numbers if enabled
+                if chapter_sync_conf.get('enabled') and chapter_sync_conf.get('across_sources') and args.from_follows:
+                    sync_cross_source_read_for_md(
+                        client,
+                        md,
+                        session_token=session_token,
+                        rpm=chapter_sync_conf.get('rpm', 300),
+                        dry_run=bool(chapter_sync_conf.get('dry_run')),
+                        only_if_ahead=bool(chapter_sync_conf.get('only_if_ahead')),
+                    )
+            if live_file is not None:
+                try:
+                    live_file.close()
+                except Exception:
+                    pass
+        except Exception:
+            # ensure file is closed on error
+            try:
+                if 'live_file' in locals() and live_file:
+                    live_file.close()
+            except Exception:
+                pass
+
+    # Write missing report if requested
+    if args.missing_report:
+        try:
+            outp = args.missing_report
+            # Ensure parent directory exists
+            try:
+                outp.parent.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                pass
+            # Filter to only entries with missing > 0 or unknown
+            def _is_missing(row: Dict[str, Any]) -> bool:
+                m = row.get('missing')
+                if isinstance(m, int):
+                    return m > 0
+                if isinstance(m, str):
+                    return m.strip().lower() == 'unknown'
+                return False
+            rows = [r for r in sync_stats if _is_missing(r)]
+            with outp.open('w', newline='', encoding='utf-8') as f:
+                w = csv.writer(f)
+                w.writerow(["title", "md_id", "markable", "marked", "missing"])
+                for row in rows:
+                    w.writerow([row.get('title',''), row.get('md_id',''), row.get('markable',''), row.get('marked',''), row.get('missing','')])
+            print(f"Missing-chapters report written to {outp} ({len(rows)} rows)")
+        except Exception as e:
+            print(f"Failed to write --missing-report: {e}")
 
     return 0 if failed == 0 else 2
 
