@@ -181,6 +181,43 @@ python import_mangadex_bookmarks_to_suwayomi.py `
   --migrate-remove-if-duplicate
 ```
 
+Quiet read-sync (no debug/logging)
+
+If you only want to sync MangaDex read markers into Suwayomi without extra output, use one of these minimal commands:
+
+```powershell
+# Sync ALL follows from MangaDex (quiet)
+python import_mangadex_bookmarks_to_suwayomi.py `
+  --base-url http://127.0.0.1:4567 `
+  --from-follows `
+  --md-username YOUR_USER `
+  --md-password YOUR_PASS `
+  --no-add-library `
+  --import-read-chapters `
+  --read-sync-number-fallback `
+  --max-read-requests-per-minute 240 `
+  --no-progress
+
+# Or: sync only IDs from a file (one MangaDex UUID per line)
+python import_mangadex_bookmarks_to_suwayomi.py `
+  --base-url http://127.0.0.1:4567 `
+  .\ids.txt `
+  --md-login-only `
+  --md-username YOUR_USER `
+  --md-password YOUR_PASS `
+  --no-add-library `
+  --import-read-chapters `
+  --read-sync-number-fallback `
+  --max-read-requests-per-minute 240 `
+  --no-progress
+```
+
+How read marks are applied
+
+- The tool sets chapter read flags via GraphQL mutations (the same path the WebUI uses): `updateChapters` (batch) and `updateChapter` (single).
+- REST write endpoints are not required and may be disabled on some servers; GraphQL is sufficient provided your auth mode permits it.
+- If marks don’t stick, ensure your server’s GraphQL endpoint is reachable and that your auth mode (auto/basic/simple/bearer) allows write mutations.
+
 ---
 
 ## Web UI Userscripts (Optional)

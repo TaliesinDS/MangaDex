@@ -24,6 +24,8 @@ MANGADEX_API = "https://api.mangadex.org"
 
 # Global chapter sync config (set in main from CLI flags)
 CHAPTER_SYNC_CONF: Dict[str, Any] = {}
+# Global debug flag for read sync
+READ_SYNC_DEBUG: bool = False
 
 # Utility early so helper functions can use it
 def truncate_text(t: str, limit: int = 200) -> str:
@@ -1437,13 +1439,102 @@ def extract_chapter_uuid_from_item(item: Dict[str, Any]) -> Optional[str]:
 
 
 def mark_chapter_read(client: SuwayomiClient, chapter_internal_id: int) -> bool:
-    # Try GET first
-    r = client.request("GET", f"/api/v1/chapter/{chapter_internal_id}/read")
-    if r.status_code == 200:
-        return True
-    # Try POST fallback
-    r2 = client.request("POST", f"/api/v1/chapter/{chapter_internal_id}/read")
-    return r2.status_code == 200
+    """Mark a chapter as read using several API variants. Returns True if a write-like
+    endpoint reported success (200/204). Avoids treating a plain GET 200 as success.
+    """
+    paths_to_try = []
+    # Preferred variants
+    paths_to_try.append(("POST", f"/api/v1/chapter/{chapter_internal_id}/read", None))
+    # Some servers use plural 'chapters'
+    paths_to_try.append(("POST", f"/api/v1/chapters/{chapter_internal_id}/read", None))
+    # PATCH body variant used by some builds
+    paths_to_try.append(("PATCH", f"/api/v1/chapter/{chapter_internal_id}", {"read": True}))
+    paths_to_try.append(("PATCH", f"/api/v1/chapters/{chapter_internal_id}", {"read": True}))
+    # PUT variant
+    paths_to_try.append(("PUT", f"/api/v1/chapter/{chapter_internal_id}/read", None))
+    paths_to_try.append(("PUT", f"/api/v1/chapters/{chapter_internal_id}/read", None))
+    # Batch fallbacks
+    paths_to_try.append(("POST", "/api/v1/chapter/read", {"ids": [chapter_internal_id], "read": True}))
+    paths_to_try.append(("POST", "/api/v1/chapters/read", {"ids": [chapter_internal_id], "read": True}))
+    paths_to_try.append(("POST", "/api/v1/chapter/batch/read", {"ids": [chapter_internal_id], "read": True}))
+    # Query-param variants
+    paths_to_try.append(("GET", f"/api/v1/chapter/read?id={chapter_internal_id}", None))
+    paths_to_try.append(("POST", f"/api/v1/chapter/read?id={chapter_internal_id}", None))
+    # Legacy GET last (don’t treat as success unless 204/explicit body; here we require 204)
+    paths_to_try.append(("GET", f"/api/v1/chapter/{chapter_internal_id}/read", None))
+
+    for method, path, body in paths_to_try:
+        try:
+            kwargs = {}
+            if body is not None:
+                kwargs["json"] = body
+            r = client.request(method, path, **kwargs)
+            code = r.status_code
+            if READ_SYNC_DEBUG:
+                try:
+                    print(f"[read-debug] mark attempt {method} {path} -> {code}")
+                except Exception:
+                    pass
+            # Treat write-like endpoints success
+            if method in ("POST", "PATCH", "PUT") and code in (200, 204):
+                return True
+            # For GET legacy variants, only accept 204 as a positive indicator
+            if method == "GET" and code == 204:
+                return True
+        except Exception:
+            continue
+    # GraphQL fallbacks (executed only if REST variants above didn't return)
+    try:
+        # Prefer using the same mutations the WebUI uses
+        # 1) updateChapters(ids: [Int!], patch: UpdateChapterPatchInput!)
+        if READ_SYNC_DEBUG:
+            try:
+                print(f"[read-debug] graphql attempt: updateChapters ids=[{chapter_internal_id}] isRead=true")
+            except Exception:
+                pass
+        mut_uc = """
+        mutation UpdateChapters($ids: [Int!]!, $patch: UpdateChapterPatchInput!) {
+          updateChapters(input: { ids: $ids, patch: $patch }) {
+            chapters { nodes { id isRead } }
+          }
+        }
+        """
+        d_uc = client.graphql(mut_uc, {"ids": [int(chapter_internal_id)], "patch": {"isRead": True, "lastPageRead": 0}})
+        if d_uc and isinstance(d_uc, dict) and (d_uc.get("data") or {}).get("updateChapters"):
+            if READ_SYNC_DEBUG:
+                try:
+                    print(f"[read-debug] graphql updateChapters ok for {chapter_internal_id}")
+                except Exception:
+                    pass
+            return True
+        # 2) updateChapter(id: Int!, patch: UpdateChapterPatchInput!)
+        if READ_SYNC_DEBUG:
+            try:
+                print(f"[read-debug] graphql attempt: updateChapter id={chapter_internal_id} isRead=true")
+            except Exception:
+                pass
+        mut_uc1 = """
+        mutation UpdateChapter($id: Int!, $patch: UpdateChapterPatchInput!) {
+          updateChapter(input: { id: $id, patch: $patch }) {
+            chapter { id isRead }
+          }
+        }
+        """
+        d_uc1 = client.graphql(mut_uc1, {"id": int(chapter_internal_id), "patch": {"isRead": True, "lastPageRead": 0}})
+        if d_uc1 and isinstance(d_uc1, dict) and (d_uc1.get("data") or {}).get("updateChapter"):
+            if READ_SYNC_DEBUG:
+                try:
+                    print(f"[read-debug] graphql updateChapter ok for {chapter_internal_id}")
+                except Exception:
+                    pass
+            return True
+    except Exception:
+        if READ_SYNC_DEBUG:
+            try:
+                print(f"[read-debug] graphql error for {chapter_internal_id}")
+            except Exception:
+                pass
+    return False
 
 
 def fetch_mangadex_read_chapters(session_token: str, manga_md_id: str) -> List[str]:
@@ -1604,7 +1695,13 @@ def _norm_title_for_match(title: str) -> str:
 
 def _parse_chapter_number_from_item(item: Dict[str, Any]) -> Optional[float]:
     # Try structured numeric fields first
-    for k in ("chapterNumber", "chapter", "number"):
+    for k in (
+        "chapterNumber", "chapter", "number",
+        # additional commonly seen fields across sources
+        "realChapterNumber", "chapter_index", "chapterIndex", "num", "no", "chap", "chNumber", "chNum",
+        # some servers expose a sortable numeric field
+        "numberSort", "sort"
+    ):
         v = item.get(k)
         if isinstance(v, (int, float)):
             return float(v)
@@ -1670,6 +1767,8 @@ def _mark_entry_up_to_number(client: SuwayomiClient, manga_internal_id: int, up_
     frac_map = _build_fraction_map(nums)
     min_interval = 60.0 / rpm if rpm > 0 else 0
     last = 0.0
+    applied = 0
+    attempted_ids: List[int] = []
     for it in items:
         n = _parse_chapter_number_from_item(it)
         if n is None:
@@ -1691,9 +1790,30 @@ def _mark_entry_up_to_number(client: SuwayomiClient, manga_internal_id: int, up_
                         time.sleep(min_interval - (now - last))
                     last = time.time()
                 try:
-                    mark_chapter_read(client, cid)
+                    ok = mark_chapter_read(client, cid)
+                    if ok:
+                        applied += 1
+                        print(f"Mark read: chapter {n} (id={cid})", flush=True)
+                    attempted_ids.append(cid)
                 except Exception:
                     pass
+    if not dry_run:
+        print(f"Mark summary: applied {applied} chapters on entry {manga_internal_id} up to {up_to}", flush=True)
+        # Verify by refetching and counting read flags if we attempted any writes
+        if attempted_ids:
+            try:
+                v_items = fetch_suwayomi_chapters(client, manga_internal_id) or []
+                read_count = 0
+                id_set = set(attempted_ids)
+                for vit in v_items:
+                    cid2 = vit.get("id") or vit.get("chapterId") or vit.get("_id")
+                    if isinstance(cid2, str) and cid2.isdigit():
+                        cid2 = int(cid2)
+                    if cid2 in id_set and (vit.get("read") or vit.get("isRead")):
+                        read_count += 1
+                print(f"Verify summary: {read_count}/{len(attempted_ids)} marked as read now", flush=True)
+            except Exception:
+                pass
 
 def _compute_md_progress_by_numbers(session_token: str, manga_md_id: str) -> Optional[float]:
     uuids = fetch_mangadex_read_chapters(session_token, manga_md_id)
@@ -1721,7 +1841,16 @@ def _compute_md_progress_by_numbers(session_token: str, manga_md_id: str) -> Opt
     canon = [n for n in nums if _is_fraction_canonical(n, frac_map)]
     return max(canon) if canon else None
 
-def sync_cross_source_read_for_md(client: SuwayomiClient, manga_md_id: str, session_token: str, rpm: int, dry_run: bool = False, only_if_ahead: bool = False) -> None:
+def sync_cross_source_read_for_md(
+    client: SuwayomiClient,
+    manga_md_id: str,
+    session_token: str,
+    rpm: int,
+    dry_run: bool = False,
+    only_if_ahead: bool = False,
+    title_threshold: float = 0.6,
+    title_strict: bool = False,
+) -> None:
     # Resolve title from MangaDex to find same-title entries
     title = fetch_title_from_mangadex(manga_md_id) or ""
     if not title:
@@ -1740,11 +1869,27 @@ def sync_cross_source_read_for_md(client: SuwayomiClient, manga_md_id: str, sess
             mid_int = int(mid)
         except Exception:
             continue
-        if _norm_title_for_match(str(t)) != norm:
+        # Use fuzzy/containment-aware title matching to link entries across sources
+        if not _is_title_match(str(t), title, threshold=max(0.0, min(1.0, float(title_threshold))), strict_exact=bool(title_strict)):
+            if READ_SYNC_DEBUG:
+                try:
+                    print(f"[read-debug] cross-source skip: '{truncate_text(str(t),80)}' not match '{truncate_text(title,80)}' (thr={title_threshold}{' strict' if title_strict else ''})")
+                except Exception:
+                    pass
             continue
         cur = _compute_entry_progress_by_number(client, mid_int)
         if only_if_ahead and not (md_max > cur):
+            if READ_SYNC_DEBUG:
+                try:
+                    print(f"[read-debug] cross-source skip id={mid_int}: md_max={md_max} <= current={cur}")
+                except Exception:
+                    pass
             continue
+        if READ_SYNC_DEBUG:
+            try:
+                print(f"[read-debug] cross-source apply id={mid_int}: md_max={md_max}, current={cur}")
+            except Exception:
+                pass
         _mark_entry_up_to_number(client, mid_int, md_max, rpm, dry_run=dry_run)
 
 def compute_md_missing_stats(client: SuwayomiClient, session_token: str, md_id: str) -> Optional[Dict[str, Any]]:
@@ -1828,18 +1973,25 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--debug-login", action="store_true", help="Print diagnostic details if MangaDex login fails (redacts password)")
     p.add_argument("--debug-follows", action="store_true", help="Verbose pagination diagnostics for follows fetch")
     p.add_argument("--max-follows", type=int, help="Optional cap on number of follows to fetch (diagnostics/testing)")
+    p.add_argument("--md-login-only", action="store_true", help="Login to MangaDex to obtain a session for read-sync, without fetching/merging follows")
     # Reading status & chapters sync
     p.add_argument("--import-reading-status", action="store_true", help="Fetch MangaDex reading statuses and map to categories")
     p.add_argument("--status-category-map", help="Comma list mapping status=categoryId (e.g. completed=5,reading=2,on_hold=7,dropped=8,plan_to_read=9,re_reading=10)")
     p.add_argument("--status-default-category", type=int, help="Fallback category id if a status has no explicit mapping")
     p.add_argument("--import-read-chapters", action="store_true", help="Fetch MangaDex read chapter UUIDs and mark them read in Suwayomi")
+    p.add_argument("--debug-read-sync", action="store_true", help="Verbose diagnostics for read sync: UUID lookup, title resolution, progress, and cross-source matches")
     p.add_argument("--read-chapters-dry-run", action="store_true", help="Simulate chapter read marking only")
     p.add_argument("--read-sync-delay", type=float, default=0.0, help="Seconds to wait after adding a manga before syncing read chapters (allow chapters to populate)")
     p.add_argument("--max-read-requests-per-minute", type=int, default=300, help="Throttle for chapter read mark requests")
     p.add_argument("--read-sync-number-fallback", action="store_true", help="When MangaDex UUIDs don't match, mark chapters by chapter number on any same-title source")
+    p.add_argument("--cross-source-title-threshold", type=float, default=0.6, help="Similarity threshold (0..1) when matching titles across sources for number-based read sync (default 0.6)")
+    p.add_argument("--cross-source-title-strict", action="store_true", help="Require normalized exact/containment match for cross-source title match (disables fuzzy-only matches)")
+    p.add_argument("--suwayomi-manga-id", type=int, help="Force read-sync onto this Suwayomi internal manga id (bypass UUID/title lookup)")
     p.add_argument("--read-sync-only-if-ahead", action="store_true", help="Only apply read marks when MangaDex has progressed further than the target entry")
-    p.add_argument("--read-sync-across-sources", action="store_true", help="Also apply read marks to same-title entries under other sources (by chapter number)")
+    p.add_argument("--read-sync-across-sources", action=argparse.BooleanOptionalAction, default=True, help="Also apply read marks to same-title entries under other sources (by chapter number). Use --no-read-sync-across-sources to disable")
     p.add_argument("--list-categories", action="store_true", help="List Suwayomi categories (id + name) and exit")
+    p.add_argument("--list-library-titles", action="store_true", help="List Suwayomi library entries with internal IDs and exit")
+    p.add_argument("--filter-title", help="Optional substring filter for --list-library-titles (case-insensitive)")
     p.add_argument("--status-map-debug", action="store_true", help="Verbose output for status->category mapping decisions")
     p.add_argument("--assume-missing-status", help="If a manga has no MangaDex status, assume this status (e.g. reading)")
     p.add_argument("--print-status-summary", action="store_true", help="Print summary of fetched statuses and mapping coverage")
@@ -1908,12 +2060,29 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     args = p.parse_args(argv)
 
+    # Enable early debug traces as soon as possible
+    try:
+        global READ_SYNC_DEBUG
+        READ_SYNC_DEBUG = bool(getattr(args, 'debug_read_sync', False))
+    except Exception:
+        READ_SYNC_DEBUG = False
+    if READ_SYNC_DEBUG:
+        try:
+            print("[read-debug] start; base_url=", args.base_url, "file=", str(args.input_file or ''), "from_follows=", bool(args.from_follows))
+        except Exception:
+            pass
+
     # Ensure session_token always defined to avoid UnboundLocalError when using --import-reading-status without --from-follows
     session_token: Optional[str] = None
 
     ids: List[str] = []
     if args.input_file:
         ids = read_any(args.input_file)
+        if READ_SYNC_DEBUG:
+            try:
+                print(f"[read-debug] ids from file: {len(ids)}")
+            except Exception:
+                pass
 
     # --- MangaDex follows fetch ---
     follows_meta: List[Dict[str, Any]] = []
@@ -1941,6 +2110,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             debug=args.debug_follows,
             max_follows=args.max_follows,
         )
+        if READ_SYNC_DEBUG:
+            try:
+                print(f"[read-debug] follows fetched: {len(follows_meta)} (max={args.max_follows})")
+            except Exception:
+                pass
         follow_ids = [m["id"] for m in follows_meta]
         # Merge with file IDs preserving order preference: file first, then new
         seen = set(ids)
@@ -1953,6 +2127,24 @@ def main(argv: Optional[List[str]] = None) -> int:
                 args.follows_json.write_text(json.dumps(follows_meta, indent=2), encoding="utf-8")
             except Exception as e:
                 print(f"Warning: failed to write follows JSON: {e}")
+    elif args.md_login_only:
+        # Login to MangaDex to obtain a session token without merging follows
+        md_user = args.md_username or os.environ.get("MANGADEX_USERNAME")
+        md_pass = args.md_password or os.environ.get("MANGADEX_PASSWORD")
+        if not md_user or not md_pass:
+            print("--md-login-only requires --md-username and --md-password (or env MANGADEX_USERNAME/MANGADEX_PASSWORD)")
+            return 2
+        session_token, login_err = login_mangadex_verbose(
+            username=md_user,
+            password=md_pass,
+            two_factor=args.md_2fa,
+            client_id=args.md_client_id or os.environ.get("MANGADEX_CLIENT_ID"),
+            client_secret=args.md_client_secret or os.environ.get("MANGADEX_CLIENT_SECRET"),
+            debug=args.debug_login,
+        )
+        if not session_token:
+            print("Failed to authenticate with MangaDex." + (f" Reason: {login_err}" if login_err else ""))
+            return 3
 
     # Optionally merge or replace with all-statuses library set
     library_statuses_all: Dict[str, str] = {}
@@ -1977,6 +2169,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                     ids.append(mid)
                     seen.add(mid)
 
+    if READ_SYNC_DEBUG:
+        try:
+            print(f"[read-debug] merged ids total: {len(ids)}")
+        except Exception:
+            pass
     if not ids and not args.list_categories and not args.migrate_library and not getattr(args, 'prune_zero_duplicates', False) and not getattr(args, 'prune_nonpreferred_langs', False):
         print("No MangaDex IDs to process (empty file and no follows fetched). Use --migrate-library or a prune mode to operate only on Suwayomi.")
         return 1
@@ -2197,9 +2394,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         'number_fallback': args.read_sync_number_fallback,
         'only_if_ahead': args.read_sync_only_if_ahead,
         'across_sources': args.read_sync_across_sources,
+        'xsrc_title_threshold': float(args.cross_source_title_threshold),
+        'xsrc_title_strict': bool(args.cross_source_title_strict),
     }
-    if args.import_read_chapters and not (args.from_follows and session_token):
-        print("--import-read-chapters requires a MangaDex session (use --from-follows login path). Disabling.")
+    # Publish chapter sync config globally for helpers
+    try:
+        global CHAPTER_SYNC_CONF
+        CHAPTER_SYNC_CONF = dict(chapter_sync_conf)
+    except Exception:
+        pass
+    # Global debug flag already set earlier for early traces
+    if args.import_read_chapters and not session_token:
+        print("--import-read-chapters requires a MangaDex session (use --from-follows or --md-login-only). Disabling.")
         chapter_sync_conf['enabled'] = False
 
     client = SuwayomiClient(
@@ -2211,6 +2417,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         verify_tls=not args.insecure,
         request_timeout=args.request_timeout,
     )
+    if READ_SYNC_DEBUG:
+        try:
+            print("[read-debug] client constructed", flush=True)
+        except Exception:
+            pass
 
     # If a missing report is requested, ensure the file exists with header now (helps live tailing)
     pre_open_live_file: Optional[Path] = None
@@ -2232,6 +2443,187 @@ def main(argv: Optional[List[str]] = None) -> int:
         MISSING_REPORT_PATH = pre_open_live_file
     except Exception:
         pass
+    if READ_SYNC_DEBUG:
+        try:
+            print(f"[read-debug] missing_report path set: {bool(MISSING_REPORT_PATH)} -> {str(MISSING_REPORT_PATH) if MISSING_REPORT_PATH else ''}", flush=True)
+        except Exception:
+            pass
+    # Unconditional progress marker to confirm flow
+    try:
+        print("[read-debug] marker: after missing_report setup", flush=True)
+    except Exception:
+        pass
+
+    # Continue with reporting/sync path (esp. when --no-add-library)
+    if READ_SYNC_DEBUG:
+        try:
+            print("[read-debug] passed option gates (categories/prune/migrate checks)", flush=True)
+        except Exception:
+            pass
+
+    # Collect per-id sync stats for optional report
+    # Unconditional marker to confirm reach of report/sync phase
+    try:
+        print("[read-debug] marker: entering report/sync prelude", flush=True)
+    except Exception:
+        pass
+    if READ_SYNC_DEBUG:
+        try:
+            print("[read-debug] entering report/sync phase", flush=True)
+        except Exception:
+            pass
+
+    added = 0
+    failed = 0
+    failures: List[Tuple[str, str]] = []
+
+    # Unconditional marker for no_add_library branch check
+    try:
+        print(f"[read-debug] marker: no_add_library={bool(args.no_add_library)}", flush=True)
+    except Exception:
+        pass
+    if READ_SYNC_DEBUG:
+        try:
+            print(f"[read-debug] about to branch on no_add_library={bool(args.no_add_library)}", flush=True)
+        except Exception:
+            pass
+
+    if args.no_add_library:
+        if READ_SYNC_DEBUG:
+            try:
+                print("[read-debug] --no-add-library path: will skip adds and proceed to reporting+sync", flush=True)
+            except Exception:
+                pass
+        if not args.no_progress:
+            print("Skipping add-to-library because --no-add-library is set; proceeding to reporting and read sync only.")
+    else:
+        # In this trimmed path, we won't implement full add logic; users can run without --no-add-library for full import
+        pass
+
+    # Summary prelude
+    print(f"Found {len(ids)} MangaDex IDs; Added: {added}, Failed: {failed}")
+
+    # Per-ID reporting and optional cross-source read sync
+    if READ_SYNC_DEBUG:
+        try:
+            print(f"[read-debug] session_token present: {bool(session_token)}; starting reporting+sync if True", flush=True)
+        except Exception:
+            pass
+    if session_token:
+        # Resolve MangaDex source id once (for possible per-id stats)
+        try:
+            md_source_id = find_mangadex_source_id(SuwayomiClient(args.base_url).get_sources())
+        except Exception:
+            md_source_id = None
+        if READ_SYNC_DEBUG:
+            try:
+                print(f"[read-debug] MangaDex source id: {md_source_id}", flush=True)
+            except Exception:
+                pass
+        for md in ids:
+            # Compute and append missing report row if requested
+            try:
+                stats = compute_md_missing_stats(client, session_token, md)
+            except Exception as _e:
+                stats = None
+            if stats and MISSING_REPORT_PATH:
+                try:
+                    with MISSING_REPORT_PATH.open('a', newline='', encoding='utf-8') as f:
+                        w = csv.writer(f)
+                        w.writerow([stats.get('title') or '', md, stats.get('markable') or 0, stats.get('marked') or 0, stats.get('missing') or 0])
+                except Exception:
+                    pass
+            # If user explicitly targets a Suwayomi entry, mark it directly by number using MD progress
+            if getattr(args, 'suwayomi_manga_id', None):
+                try:
+                    target_id = int(args.suwayomi_manga_id)
+                except Exception:
+                    target_id = None
+                if target_id:
+                    try:
+                        md_max = _compute_md_progress_by_numbers(session_token, md)
+                    except Exception:
+                        md_max = None
+                    if md_max is not None:
+                        if READ_SYNC_DEBUG:
+                            try:
+                                cur = _compute_entry_progress_by_number(client, target_id)
+                                print(f"[read-debug] direct apply id={target_id}: md_max={md_max}, current={cur}")
+                            except Exception:
+                                pass
+                        try:
+                            _mark_entry_up_to_number(
+                                client=client,
+                                manga_internal_id=target_id,
+                                up_to=md_max,
+                                rpm=chapter_sync_conf.get('rpm', 300),
+                                dry_run=bool(chapter_sync_conf.get('dry_run')),
+                            )
+                        except Exception as _e:
+                            if READ_SYNC_DEBUG:
+                                try:
+                                    print(f"[read-debug] direct apply error for {target_id}: {_e}")
+                                except Exception:
+                                    pass
+                        # Move to next md id after direct marking
+                        continue
+            # Cross-source by-number sync when enabled and requested
+            try:
+                if chapter_sync_conf.get('enabled') and chapter_sync_conf.get('across_sources') and chapter_sync_conf.get('number_fallback'):
+                    sync_cross_source_read_for_md(
+                        client=client,
+                        manga_md_id=md,
+                        session_token=session_token,
+                        rpm=chapter_sync_conf.get('rpm', 300),
+                        dry_run=bool(chapter_sync_conf.get('dry_run')),
+                        only_if_ahead=bool(chapter_sync_conf.get('only_if_ahead')),
+                        title_threshold=float(chapter_sync_conf.get('xsrc_title_threshold', 0.6)),
+                        title_strict=bool(chapter_sync_conf.get('xsrc_title_strict', False)),
+                    )
+            except Exception as _e:
+                if READ_SYNC_DEBUG:
+                    try:
+                        print(f"[read-debug] cross-source sync error for {md}: {_e}")
+                    except Exception:
+                        pass
+
+    # Done
+    return 0 if failed == 0 else 2
+
+def _extract_int(v: Any) -> Optional[int]:
+    try:
+        if isinstance(v, bool) or v is None:
+            return None
+        if isinstance(v, int):
+            return v
+        if isinstance(v, str) and v.strip():
+            return int(v.strip())
+    except Exception:
+        return None
+    return None
+
+def _extract_entry_props(it: Dict[str, Any]) -> Tuple[Optional[int], Optional[str], Optional[int]]:
+    """Best-effort extract (internal_id, title, source_id) from a library entry with varied shapes."""
+    mid: Optional[int] = None
+    title: Optional[str] = None
+    sid: Optional[int] = None
+    # Direct fields
+    mid = mid or _extract_int(it.get('id') or it.get('mangaId') or it.get('manga_id'))
+    title = it.get('title') or it.get('name') or it.get('mangaTitle') or it.get('manga_title')
+    sid = sid or _extract_int(it.get('sourceId') or it.get('source_id'))
+    # Nested common containers
+    m = it.get('manga') or {}
+    if isinstance(m, dict):
+        mid = mid or _extract_int(m.get('id'))
+        title = title or m.get('title') or m.get('name')
+        sid = sid or _extract_int(m.get('sourceId') or m.get('source_id'))
+        src = m.get('source') or {}
+        if isinstance(src, dict):
+            sid = sid or _extract_int(src.get('id') or src.get('sourceId'))
+    src2 = it.get('source') or {}
+    if isinstance(src2, dict):
+        sid = sid or _extract_int(src2.get('id') or src2.get('sourceId'))
+    return mid, title, sid
 
     if args.list_categories:
         try:
@@ -2349,6 +2741,40 @@ def main(argv: Optional[List[str]] = None) -> int:
                         if not args.no_progress:
                             print(f"PRUNE '{title}' (chapters={cnt}) -> {'OK' if ok else 'FAIL'}")
         print(f"Prune summary: kept={kept} removed={removed}")
+        return 0
+
+    # List library entries (id, source, title) and exit
+    if args.list_library_titles:
+        try:
+            srcs = client.get_sources()
+            src_name_by_id = {}
+            for s in srcs:
+                try:
+                    sid = s.get('id') or s.get('sourceId')
+                    name = s.get('name') or s.get('sourceName') or s.get('lang') or ''
+                    if sid is not None:
+                        src_name_by_id[int(sid)] = str(name)
+                except Exception:
+                    pass
+        except Exception:
+            src_name_by_id = {}
+        lib = client.get_library_graphql() or client.get_library() or []
+        q = (args.filter_title or '').lower().strip()
+        print("Suwayomi library entries:")
+        shown = 0
+        for it in lib:
+            try:
+                mid, title, sid = _extract_entry_props(it)
+                if title is None:
+                    continue
+                if q and q not in title.lower():
+                    continue
+                src_name = src_name_by_id.get(sid or -1, str(sid) if sid is not None else "?")
+                print(f"  id={mid}  source={src_name}  title={title}")
+                shown += 1
+            except Exception:
+                continue
+        print(f"Total shown: {shown}")
         return 0
 
     # Prune non-preferred language entries when a preferred-language entry exists for the same title
@@ -2884,11 +3310,32 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"Migrate summary: migrated={migrated} skipped={skipped} failed={failed}")
         return 0 if failed == 0 else 6
 
+    # After option gates, continue
+    if READ_SYNC_DEBUG:
+        try:
+            print("[read-debug] passed option gates (categories/prune/migrate checks)", flush=True)
+        except Exception:
+            pass
     # Collect per-id sync stats for optional report
+    if READ_SYNC_DEBUG:
+        try:
+            print("[read-debug] entering report/sync phase", flush=True)
+        except Exception:
+            pass
     sync_stats: List[Dict[str, Any]] = []
 
+    if READ_SYNC_DEBUG:
+        try:
+            print(f"[read-debug] about to branch on no_add_library={bool(args.no_add_library)}", flush=True)
+        except Exception:
+            pass
     if args.no_add_library:
         added, failed, failures = (0, 0, [])
+        if READ_SYNC_DEBUG:
+            try:
+                print("[read-debug] --no-add-library path: will skip adds and proceed to reporting+sync")
+            except Exception:
+                pass
         if not args.no_progress:
             print("Skipping add-to-library because --no-add-library is set; proceeding to reporting and read sync only.")
     else:
@@ -2934,6 +3381,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"  ... and {len(failures) - 50} more")
 
     # Per-ID reporting and optional cross-source read sync (append rows atomically per write)
+    if READ_SYNC_DEBUG:
+        try:
+            print(f"[read-debug] session_token present: {bool(session_token)}; starting reporting+sync if True")
+        except Exception:
+            pass
     if session_token:
         # Resolve MangaDex source id once for UUID-based marking against existing entries
         md_source_id: Optional[int] = None
@@ -2942,6 +3394,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             md_source_id = find_mangadex_source_id(srcs)
         except Exception:
             md_source_id = None
+        if READ_SYNC_DEBUG:
+            print(f"[read-debug] MangaDex source id: {md_source_id}")
         outp = args.missing_report if args.missing_report else None
         if outp:
             try:
@@ -2984,10 +3438,29 @@ def main(argv: Optional[List[str]] = None) -> int:
             if not MD_ID_RE.match(md):
                 continue
             try:
-                # If requested, mark reads on existing MangaDex entries without adding new ones
-                if args.import_read_chapters and args.no_add_library and md_source_id is not None:
+                # If requested, mark reads on an explicitly provided Suwayomi manga id first
+                if args.import_read_chapters and args.no_add_library and getattr(args, 'suwayomi_manga_id', None):
+                    forced_id = int(args.suwayomi_manga_id)
+                    if READ_SYNC_DEBUG:
+                        print(f"[read-debug] Forcing read-sync onto Suwayomi manga id={forced_id} for MD {md}")
+                    if chapter_sync_conf.get('delay', 0) and chapter_sync_conf.get('delay', 0) > 0:
+                        time.sleep(float(chapter_sync_conf.get('delay', 0)))
+                    sync_read_chapters_for_manga(
+                        client,
+                        session_token,
+                        md,
+                        forced_id,
+                        dry_run=bool(chapter_sync_conf.get('dry_run')),
+                        rpm=int(chapter_sync_conf.get('rpm', 300)),
+                        show_progress=not args.no_progress,
+                        prefix=f"[read-sync] ",
+                    )
+                # Otherwise, mark reads on existing MangaDex entries without adding new ones
+                elif args.import_read_chapters and args.no_add_library and md_source_id is not None:
                     try:
                         internal_id = search_by_mangadex_id(client, md_source_id, md)
+                        if READ_SYNC_DEBUG:
+                            print(f"[read-debug] UUID lookup for {md}: internal_id={internal_id}")
                         if internal_id:
                             if chapter_sync_conf.get('delay', 0) and chapter_sync_conf.get('delay', 0) > 0:
                                 time.sleep(float(chapter_sync_conf.get('delay', 0)))
@@ -3001,14 +3474,51 @@ def main(argv: Optional[List[str]] = None) -> int:
                                 show_progress=not args.no_progress,
                                 prefix=f"[read-sync] ",
                             )
+                        else:
+                            # Fallback: find MD entry by title in library (same source) and mark UUIDs on it
+                            title = fetch_title_from_mangadex(md) or ""
+                            if READ_SYNC_DEBUG:
+                                print(f"[read-debug] Fallback by title for {md}: '{truncate_text(title, 120)}'")
+                            if title:
+                                norm_target = _norm_title_for_match(title)
+                                lib = client.get_library_graphql() or client.get_library() or []
+                                chosen_id: Optional[int] = None
+                                for it in lib:
+                                    mid2, t2, sid2 = _extract_entry_props(it)
+                                    if sid2 is None or sid2 != md_source_id:
+                                        continue
+                                    if not t2:
+                                        continue
+                                    if _is_title_match(t2, title, threshold=0.6, strict_exact=False):
+                                        chosen_id = mid2
+                                        if READ_SYNC_DEBUG:
+                                            print(f"[read-debug] Matched library MD entry by title: id={mid2} title='{truncate_text(t2, 80)}'")
+                                        break
+                                if chosen_id:
+                                    if chapter_sync_conf.get('delay', 0) and chapter_sync_conf.get('delay', 0) > 0:
+                                        time.sleep(float(chapter_sync_conf.get('delay', 0)))
+                                    sync_read_chapters_for_manga(
+                                        client,
+                                        session_token,
+                                        md,
+                                        chosen_id,
+                                        dry_run=bool(chapter_sync_conf.get('dry_run')),
+                                        rpm=int(chapter_sync_conf.get('rpm', 300)),
+                                        show_progress=not args.no_progress,
+                                        prefix=f"[read-sync] ",
+                                    )
+                                else:
+                                    if READ_SYNC_DEBUG:
+                                        print(f"[read-debug] No MD-source library match by title for {md}; will rely on cross-source fallback if enabled.")
                     except Exception:
                         pass
                 # Compute MD vs Suwayomi (MD source) stats first
                 st = compute_md_missing_stats(client, session_token, md)
                 if st:
                     _append_row(st)
-                # Cross-source sync by numbers if enabled
-                if chapter_sync_conf.get('enabled') and chapter_sync_conf.get('across_sources') and args.from_follows:
+                # Cross-source sync by numbers if enabled (for any ID source)
+                # Only run cross-source number-based sync when user opted-in via --read-sync-number-fallback
+                if chapter_sync_conf.get('enabled') and chapter_sync_conf.get('across_sources') and chapter_sync_conf.get('number_fallback'):
                     sync_cross_source_read_for_md(
                         client,
                         md,
@@ -3016,9 +3526,16 @@ def main(argv: Optional[List[str]] = None) -> int:
                         rpm=chapter_sync_conf.get('rpm', 300),
                         dry_run=bool(chapter_sync_conf.get('dry_run')),
                         only_if_ahead=bool(chapter_sync_conf.get('only_if_ahead')),
+                        title_threshold=float(chapter_sync_conf.get('xsrc_title_threshold', 0.6)),
+                        title_strict=bool(chapter_sync_conf.get('xsrc_title_strict', False)),
                     )
             except Exception as _e:
                 # Keep going even if one ID fails during reporting
+                if READ_SYNC_DEBUG:
+                    try:
+                        print(f"[read-debug] Exception during per-id processing for {md}: {_e}")
+                    except Exception:
+                        pass
                 continue
 
     # Write missing report if requested

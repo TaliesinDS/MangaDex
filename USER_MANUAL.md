@@ -92,6 +92,40 @@ python import_mangadex_bookmarks_to_suwayomi.py `
    --missing-report .\reports\md_missing_reads.csv
 ```
 
+Quiet read-sync (no extra logging)
+
+```powershell
+# Sync all follows quietly
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   --from-follows `
+   --md-username USER `
+   --md-password PASS `
+   --no-add-library `
+   --import-read-chapters `
+   --read-sync-number-fallback `
+   --max-read-requests-per-minute 240 `
+   --no-progress
+
+# Or: sync a list of specific IDs (one per line)
+python import_mangadex_bookmarks_to_suwayomi.py `
+   --base-url http://127.0.0.1:4567 `
+   .\ids.txt `
+   --md-login-only `
+   --md-username USER `
+   --md-password PASS `
+   --no-add-library `
+   --import-read-chapters `
+   --read-sync-number-fallback `
+   --max-read-requests-per-minute 240 `
+   --no-progress
+```
+
+Implementation note
+
+- Read flags are applied using GraphQL mutations (`updateChapters` and `updateChapter`), matching the Suwayomi WebUI behavior.
+- REST write endpoints may return 404 on some builds; this is expected. Ensure your auth mode permits GraphQL write operations.
+
 Troubleshooting
 - “WARN no chapters loaded yet …”: the tool records `unknown` to the CSV; raise `--read-sync-delay` (e.g., 3–5 s) and rerun or open the title in the Suwayomi UI to force chapter fetch.
 - Missing rows don’t appear during the run: ensure the CSV isn’t open in Excel (file lock). Use `Get-Content .\reports\md_missing_reads.csv -Wait` to tail the file.
