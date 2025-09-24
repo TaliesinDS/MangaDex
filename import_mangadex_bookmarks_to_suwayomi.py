@@ -1896,6 +1896,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--debug-lists", action="store_true", help="Verbose output for custom lists fetching and mapping decisions")
     # Reports
     p.add_argument("--missing-report", type=Path, help="Write a CSV of titles where read-chapter sync found missing chapters (title, md_id, markable, marked, missing)")
+    p.add_argument("--no-add-library", action="store_true", help="Do not add missing titles to Suwayomi; only run reporting and (if enabled) cross-source read sync against existing library entries")
 
     # Prune-only mode (hard prune duplicates without searching)
     p.add_argument("--prune-zero-duplicates", action="store_true", help="Remove zero/low-chapter entries when another entry with the same title already exists with >= --prune-threshold-chapters chapters (no searching)")
@@ -2886,38 +2887,43 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Collect per-id sync stats for optional report
     sync_stats: List[Dict[str, Any]] = []
 
-    added, failed, failures = import_ids(
-        client,
-        ids,
-        dry_run=args.dry_run,
-        use_title_fallback=not args.no_title_fallback,
-        show_progress=not args.no_progress,
-        throttle=args.throttle,
-        category_id=args.category_id,
-        reading_statuses=reading_statuses,
-        status_category_map=status_map,
-        status_default_category=args.status_default_category,
-        session_token=session_token if args.from_follows else None,
-        chapter_sync_conf=chapter_sync_conf,
-    status_map_debug=args.status_map_debug,
-    assume_missing_status=(args.assume_missing_status.lower() if args.assume_missing_status else None),
-    lists_membership=lists_membership if args.import_lists else None,
-    lists_category_map=lists_category_map if args.import_lists else None,
-    lists_ignore_set=lists_ignore_set if args.import_lists else None,
-    rehome_conf={
-        'enabled': args.rehoming_enabled,
-        'sources': [s.strip() for s in (args.rehoming_sources.split(',') if args.rehoming_sources else []) if s.strip()],
-        'skip_if_ge': args.rehoming_skip_if_chapters_ge,
-        'remove_md': args.rehoming_remove_mangadex,
-        'exclude_frags': [s.strip().lower() for s in (args.exclude_sources.split(',') if args.exclude_sources else []) if s.strip()],
-        'best_source': bool(args.best_source),
-        'best_candidates': int(args.best_source_candidates),
-        'min_chapters_per_alt': int(args.min_chapters_per_alt),
-        'canonical': bool(args.best_source_canonical),
-        'title_threshold': float(args.migrate_title_threshold),
-        'title_strict': bool(args.migrate_title_strict),
-    } if args.rehoming_enabled else None,
-    )
+    if args.no_add_library:
+        added, failed, failures = (0, 0, [])
+        if not args.no_progress:
+            print("Skipping add-to-library because --no-add-library is set; proceeding to reporting and read sync only.")
+    else:
+        added, failed, failures = import_ids(
+            client,
+            ids,
+            dry_run=args.dry_run,
+            use_title_fallback=not args.no_title_fallback,
+            show_progress=not args.no_progress,
+            throttle=args.throttle,
+            category_id=args.category_id,
+            reading_statuses=reading_statuses,
+            status_category_map=status_map,
+            status_default_category=args.status_default_category,
+            session_token=session_token if args.from_follows else None,
+            chapter_sync_conf=chapter_sync_conf,
+        status_map_debug=args.status_map_debug,
+        assume_missing_status=(args.assume_missing_status.lower() if args.assume_missing_status else None),
+        lists_membership=lists_membership if args.import_lists else None,
+        lists_category_map=lists_category_map if args.import_lists else None,
+        lists_ignore_set=lists_ignore_set if args.import_lists else None,
+        rehome_conf={
+            'enabled': args.rehoming_enabled,
+            'sources': [s.strip() for s in (args.rehoming_sources.split(',') if args.rehoming_sources else []) if s.strip()],
+            'skip_if_ge': args.rehoming_skip_if_chapters_ge,
+            'remove_md': args.rehoming_remove_mangadex,
+            'exclude_frags': [s.strip().lower() for s in (args.exclude_sources.split(',') if args.exclude_sources else []) if s.strip()],
+            'best_source': bool(args.best_source),
+            'best_candidates': int(args.best_source_candidates),
+            'min_chapters_per_alt': int(args.min_chapters_per_alt),
+            'canonical': bool(args.best_source_canonical),
+            'title_threshold': float(args.migrate_title_threshold),
+            'title_strict': bool(args.migrate_title_strict),
+        } if args.rehoming_enabled else None,
+        )
 
     print(f"Found {len(ids)} MangaDex IDs; Added: {added}, Failed: {failed}")
     if failures:
@@ -2927,48 +2933,80 @@ def main(argv: Optional[List[str]] = None) -> int:
         if len(failures) > 50:
             print(f"  ... and {len(failures) - 50} more")
 
-    # Per-ID reporting and optional cross-source read sync (with optional live report appending)
+    # Per-ID reporting and optional cross-source read sync (append rows atomically per write)
     if session_token:
+        # Resolve MangaDex source id once for UUID-based marking against existing entries
+        md_source_id: Optional[int] = None
         try:
-            # Prepare live report writer if requested
-            live_writer = None
-            live_file = None
-            if args.missing_report:
-                outp = args.missing_report
+            srcs = client.get_sources()
+            md_source_id = find_mangadex_source_id(srcs)
+        except Exception:
+            md_source_id = None
+        outp = args.missing_report if args.missing_report else None
+        if outp:
+            try:
+                outp.parent.mkdir(parents=True, exist_ok=True)
+                # Ensure header exists (pre-created above; safeguard here too)
+                if not outp.exists() or outp.stat().st_size == 0:
+                    with outp.open('w', newline='', encoding='utf-8') as f:
+                        csv.writer(f).writerow(["title", "md_id", "markable", "marked", "missing"])
+            except Exception:
+                pass
+
+        appended_count = 0
+        written_ids: Set[str] = set()
+
+        def _append_row(row: Dict[str, Any]):
+            m = row.get('missing')
+            is_missing = (isinstance(m, int) and m > 0) or (isinstance(m, str) and m.strip().lower() == 'unknown')
+            if not is_missing:
+                return
+            mdv = str(row.get('md_id','') or '')
+            if mdv in written_ids:
+                return
+            written_ids.add(mdv)
+            sync_stats.append(row)
+            if outp:
                 try:
-                    outp.parent.mkdir(parents=True, exist_ok=True)
+                    with outp.open('a', newline='', encoding='utf-8') as f:
+                        w = csv.writer(f)
+                        w.writerow([row.get('title',''), row.get('md_id',''), row.get('markable',''), row.get('marked',''), row.get('missing','')])
+                    # Heartbeat output to reassure progress
+                    nonlocal appended_count
+                    appended_count += 1
+                    if not args.no_progress:
+                        print(f"[report] appended {appended_count}: {row.get('md_id','')} missing={row.get('missing','')}")
                 except Exception:
-                    pass
-                # open once in append mode; write header if file empty
-                live_file = outp.open('a', newline='', encoding='utf-8')
-                live_writer = csv.writer(live_file)
-                try:
-                    if outp.stat().st_size == 0:
-                        live_writer.writerow(["title", "md_id", "markable", "marked", "missing"])
-                except Exception:
+                    # Ignore file write errors (e.g., file locked); continue processing
                     pass
 
-            def _emit(row: Dict[str, Any]):
-                # Only write rows with missing > 0 or unknown
-                m = row.get('missing')
-                is_missing = (isinstance(m, int) and m > 0) or (isinstance(m, str) and m.strip().lower() == 'unknown')
-                if not is_missing:
-                    return
-                sync_stats.append(row)
-                if live_writer is not None:
-                    live_writer.writerow([row.get('title',''), row.get('md_id',''), row.get('markable',''), row.get('marked',''), row.get('missing','')])
+        for md in ids:
+            if not MD_ID_RE.match(md):
+                continue
+            try:
+                # If requested, mark reads on existing MangaDex entries without adding new ones
+                if args.import_read_chapters and args.no_add_library and md_source_id is not None:
                     try:
-                        live_file.flush()
+                        internal_id = search_by_mangadex_id(client, md_source_id, md)
+                        if internal_id:
+                            if chapter_sync_conf.get('delay', 0) and chapter_sync_conf.get('delay', 0) > 0:
+                                time.sleep(float(chapter_sync_conf.get('delay', 0)))
+                            sync_read_chapters_for_manga(
+                                client,
+                                session_token,
+                                md,
+                                internal_id,
+                                dry_run=bool(chapter_sync_conf.get('dry_run')),
+                                rpm=int(chapter_sync_conf.get('rpm', 300)),
+                                show_progress=not args.no_progress,
+                                prefix=f"[read-sync] ",
+                            )
                     except Exception:
                         pass
-
-            for md in ids:
-                if not MD_ID_RE.match(md):
-                    continue
                 # Compute MD vs Suwayomi (MD source) stats first
                 st = compute_md_missing_stats(client, session_token, md)
                 if st:
-                    _emit(st)
+                    _append_row(st)
                 # Cross-source sync by numbers if enabled
                 if chapter_sync_conf.get('enabled') and chapter_sync_conf.get('across_sources') and args.from_follows:
                     sync_cross_source_read_for_md(
@@ -2979,18 +3017,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                         dry_run=bool(chapter_sync_conf.get('dry_run')),
                         only_if_ahead=bool(chapter_sync_conf.get('only_if_ahead')),
                     )
-            if live_file is not None:
-                try:
-                    live_file.close()
-                except Exception:
-                    pass
-        except Exception:
-            # ensure file is closed on error
-            try:
-                if 'live_file' in locals() and live_file:
-                    live_file.close()
-            except Exception:
-                pass
+            except Exception as _e:
+                # Keep going even if one ID fails during reporting
+                continue
 
     # Write missing report if requested
     if args.missing_report:
