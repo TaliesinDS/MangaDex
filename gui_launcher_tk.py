@@ -203,12 +203,17 @@ def build_args(v: dict) -> List[str]:
         args += ["--max-read-requests-per-minute", v['max_read_requests_per_minute'].get().strip()]
     if v.get('read_sync_number_fallback') and v['read_sync_number_fallback'].get():
         args += ["--read-sync-number-fallback"]
-    if v.get('read_sync_across_sources') and v['read_sync_across_sources'].get():
-        args += ["--read-sync-across-sources"]
+    if v.get('read_sync_across_sources'):
+        if v['read_sync_across_sources'].get():
+            args += ["--read-sync-across-sources"]
+        else:
+            args += ["--no-read-sync-across-sources"]
     if v.get('read_sync_only_if_ahead') and v['read_sync_only_if_ahead'].get():
         args += ["--read-sync-only-if-ahead"]
     if v.get('missing_report') and v['missing_report'].get().strip():
         args += ["--missing-report", v['missing_report'].get().strip()]
+
+    filter_title_arg = v['filter_title'].get().strip() if v.get('filter_title') else ''
 
     # Category
     if v['category_id'].get().strip():
@@ -277,8 +282,9 @@ def build_args(v: dict) -> List[str]:
             args += ["--migrate-max-sources-per-site", v['migrate_max_sources_per_site'].get().strip()]
         if v.get('migrate_try_second_page') and v['migrate_try_second_page'].get():
             args += ["--migrate-try-second-page"]
-        if v['filter_title'].get().strip():
-            args += ["--migrate-filter-title", v['filter_title'].get().strip()]
+        if filter_title_arg:
+            args += ["--migrate-filter-title", filter_title_arg]
+            filter_title_arg = ''
         # Title matching options
         if v.get('migrate_title_threshold') and v['migrate_title_threshold'].get().strip() and v['migrate_title_threshold'].get().strip() != '0.6':
             args += ["--migrate-title-threshold", v['migrate_title_threshold'].get().strip()]
@@ -302,8 +308,8 @@ def build_args(v: dict) -> List[str]:
         args += ["--prune-filter-title", v['prune_filter_title'].get().strip()]
 
     # Misc
-    if v['filter_title'].get().strip():
-        args += ["--migrate-filter-title", v['filter_title'].get().strip()]
+    if filter_title_arg:
+        args += ["--migrate-filter-title", filter_title_arg]
     if v['dry_run'].get():
         args += ["--dry-run"]
     if v['debug'].get():

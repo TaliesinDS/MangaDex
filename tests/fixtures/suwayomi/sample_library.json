@@ -1,0 +1,14 @@
+{
+  "library": [
+    {
+      "id": 101,
+      "title": "Example Series One",
+      "sourceId": 12
+    },
+    {
+      "id": 102,
+      "title": "Another Sample",
+      "sourceId": 34
+    }
+  ]
+}

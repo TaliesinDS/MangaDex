@@ -91,6 +91,7 @@ python import_mangadex_bookmarks_to_suwayomi.py `
    --max-read-requests-per-minute 240 `
    --missing-report .\reports\md_missing_reads.csv
 ```
+> Cross-source syncing is opt-in. Include `--read-sync-across-sources` (and usually `--read-sync-number-fallback`) when you want chapter progress mirrored onto other sources.
 
 Quiet read-sync (no extra logging)
 
@@ -104,6 +105,7 @@ python import_mangadex_bookmarks_to_suwayomi.py `
    --no-add-library `
    --import-read-chapters `
    --read-sync-number-fallback `
+   --read-sync-across-sources `
    --max-read-requests-per-minute 240 `
    --no-progress
 
@@ -117,6 +119,7 @@ python import_mangadex_bookmarks_to_suwayomi.py `
    --no-add-library `
    --import-read-chapters `
    --read-sync-number-fallback `
+   --read-sync-across-sources `
    --max-read-requests-per-minute 240 `
    --no-progress
 ```

@@ -1988,7 +1988,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--cross-source-title-strict", action="store_true", help="Require normalized exact/containment match for cross-source title match (disables fuzzy-only matches)")
     p.add_argument("--suwayomi-manga-id", type=int, help="Force read-sync onto this Suwayomi internal manga id (bypass UUID/title lookup)")
     p.add_argument("--read-sync-only-if-ahead", action="store_true", help="Only apply read marks when MangaDex has progressed further than the target entry")
-    p.add_argument("--read-sync-across-sources", action=argparse.BooleanOptionalAction, default=True, help="Also apply read marks to same-title entries under other sources (by chapter number). Use --no-read-sync-across-sources to disable")
+    p.add_argument("--read-sync-across-sources", action=argparse.BooleanOptionalAction, default=False, help="Also apply read marks to same-title entries under other sources (by chapter number). Use this flag to enable cross-source sync; add --no-read-sync-across-sources to force it off explicitly")
     p.add_argument("--list-categories", action="store_true", help="List Suwayomi categories (id + name) and exit")
     p.add_argument("--list-library-titles", action="store_true", help="List Suwayomi library entries with internal IDs and exit")
     p.add_argument("--filter-title", help="Optional substring filter for --list-library-titles (case-insensitive)")

@@ -1,9 +1,47 @@
 # Seiyomi Test Plan (Manual + Scripted)
 
 This document outlines a practical set of tests to validate the end-to-end behavior of `import_mangadex_bookmarks_to_suwayomi.py` and the GUI.
-It favors reproducible PowerShell commands (Windows) and clear pass/fail criteria.
+It now includes an automated `pytest` suite alongside reproducible PowerShell commands (Windows) and clear pass/fail criteria.
 
 > Shell: PowerShell (`pwsh.exe`). Replace backticks with carets (^) for `cmd.exe`. Paths assume repo root.
+
+---
+
+## Automated Tests (pytest)
+
+The repository ships with an initial `pytest` suite that exercises core helper functions. The suite is designed to grow alongside additional fixtures and mocked scenarios (see `docs/automated_test_proposal.md`).
+
+### 0.1 Environment
+
+```powershell
+# Activate the virtual environment first
+& .\.venv\Scripts\Activate.ps1
+
+# Install development dependencies once
+python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
+```
+
+### 0.2 Run the Suite
+
+Inside VS Code, open the **Testing** panel and click **Run All Tests**. The project settings already point the test runner at the `tests/` directory.
+
+Alternatively, launch the bundled task or run pytest directly:
+
+```powershell
+# VS Code task (Command Palette → "Tasks: Run Task" → "Run importer tests")
+
+# Direct invocation
+python -m pytest --maxfail=1 --disable-warnings
+```
+
+### 0.3 Current Coverage
+
+- `tests/test_title_and_input_helpers.py` — validates title normalization, similarity checks, ID extraction, multi-format file ingestion, and canonical chapter helpers.
+- `tests/test_suwayomi_client_http.py` — exercises `SuwayomiClient` HTTP fallbacks (library removal and GraphQL endpoint probing) using the `responses` mock fixture.
+- `tests/fixtures/` — starter payloads for MangaDex and Suwayomi mock data.
+
+Future work will expand into HTTP contract and CLI scenario tests per the automation proposal.
 
 ---
 
